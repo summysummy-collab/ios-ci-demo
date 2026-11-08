@@ -1,0 +1,72 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+  pull_request:
+  workflow_dispatch:
+
+# 这个仓库不产出任何私有产物，只验证 macOS 构建链路是否可用
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 环境信息
+        run: |
+          sw_vers
+          uname -m
+          ls -d /Applications/Xcode*.app
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - name: 选最新的 Xcode
+        run: |
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "using $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: 安装 XcodeGen
+        run: brew install xcodegen
+
+      - name: 生成工程
+        run: |
+          xcodegen generate
+          ls -la
+
+      - name: 模拟器构建
+        run: |
+          set -o pipefail
+          xcodebuild -project CIDemo.xcodeproj -scheme CIDemo \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -configuration Release CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tail -20
+
+      - name: 真机架构构建（不签名）
+        run: |
+          set -o pipefail
+          xcodebuild -project CIDemo.xcodeproj -scheme CIDemo \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -configuration Release CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tail -20
+
+      - name: 产物信息
+        run: |
+          for arch in iphonesimulator iphoneos; do
+            APP=$(find ~/Library/Developer/Xcode/DerivedData -type d \
+                  -path "*/Build/Products/Release-${arch}/CIDemo.app" 2>/dev/null | head -1)
+            if [ -n "$APP" ]; then
+              echo "${arch}: $(du -sh "$APP" | cut -f1)  $(lipo -archs "$APP/CIDemo" 2>/dev/null || true)"
+            else
+              echo "${arch}: 未找到产物"
+            fi
+          done

@@ -1,0 +1,12 @@
+.DS_Store
+
+# XcodeGen 生成，不入库
+*.xcodeproj
+*.xcworkspace
+
+# 构建产物
+build/
+DerivedData/
+xcuserdata/
+*.ipa
+*.dSYM.zip
