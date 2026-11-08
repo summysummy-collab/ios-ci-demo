@@ -3,11 +3,17 @@ name: build
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'LICENSE'
-      - '.gitignore'
+    # 只有 demo 工程本身变化才构建；改 README / 别的 workflow 都不触发
+    paths:
+      - 'Sources/**'
+      - 'Support/**'
+      - 'project.yml'
+      - '.github/workflows/build.yml'
   pull_request:
+    paths:
+      - 'Sources/**'
+      - 'Support/**'
+      - 'project.yml'
   workflow_dispatch:
 
 # 这个仓库不产出任何私有产物，只验证 macOS 构建链路是否可用
