@@ -84,6 +84,24 @@ jobs:
           fi
           xcodegen generate
 
+          # 官方 CXR-L SDK 用本地 :path pod 集成（RGCxrClient 不在公共 trunk）。
+          # 顺序不能反：先 xcodegen 生成 xcodeproj，再 pod install 生成 xcworkspace。
+          if ! command -v pod >/dev/null 2>&1; then
+            sudo gem install cocoapods --no-document
+          fi
+          pod --version
+          pod install
+          test -d BigOrderMonitor.xcworkspace || { echo "::error::pod install 未生成 xcworkspace"; exit 1; }
+
+          # CocoaPods 会替换 target 的 baseConfigurationReference，
+          # 使 Config/Secrets.xcconfig 的 BOCOS_* 变量失效（Info.plist 会留下字面量）。
+          # 显式把变量补写进 Pods 的 xcconfig，保证展开为预期值。
+          find "Pods/Target Support Files/Pods-BigOrderMonitor" -name "*.xcconfig" -print0 \
+            | while IFS= read -r -d '' XC; do
+                printf '\nBOCOS_AK = %s\nBOCOS_SK = %s\nBOCOS_BUCKET = bigorder-sync-1259316772\nBOCOS_REGION = ap-guangzhou\n' "$AK" "$SK" >> "$XC"
+              done
+          echo "Pods 已就绪，SDK 已集成"
+
       # 所有打印都刻意不输出证书 CN / TeamID / 描述文件 UUID / 设备列表：
       # 本仓库日志对全网公开。完整编译日志可用带认证的 Actions API 在本地拉取分析。
       - name: 导入签名证书
@@ -130,7 +148,7 @@ jobs:
         run: |
           set -o pipefail
           set +e
-          xcodebuild -project BigOrderMonitor.xcodeproj -scheme BigOrderMonitor \
+          xcodebuild -workspace BigOrderMonitor.xcworkspace -scheme BigOrderMonitor \
             -configuration Release -destination "generic/platform=iOS" \
             -archivePath build/BigOrderMonitor.xcarchive archive \
             CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM="$TEAM_ID" \
@@ -185,6 +203,10 @@ jobs:
           APP=$(find Payload -maxdepth 1 -name "*.app" | head -1)
           codesign --verify --strict --verbose=2 "$APP" 2>&1 | tail -3
           test -f "$APP/embedded.mobileprovision" || { echo "::error::包内缺描述文件"; exit 1; }
+          # ★ 真机通道的硬证据：canImport(RGCxrClient) 成立才会链接这个 framework
+          find "$APP/Frameworks" -maxdepth 1 -name "RGCxrClient.framework" | grep -q . \
+            || { echo "::error::包内缺 RGCxrClient.framework，真机通道未编入"; exit 1; }
+          echo "CXR-L SDK 已内嵌（真机桥接可用）"
           BID=$(plutil -extract CFBundleIdentifier raw "$APP/Info.plist")
           echo "Bundle ID: $BID"
           echo "体积: $(du -sh "$APP" | cut -f1)"
@@ -197,8 +219,9 @@ jobs:
           set -euo pipefail
           unzip -p build/*.ipa Payload/BigOrderMonitor.app/Info.plist > "$RUNNER_TEMP/info.plist"
           AK=$(plutil -extract BOCosAK raw "$RUNNER_TEMP/info.plist" 2>/dev/null || true)
-          if printf '%s' "$AK" | grep -q 'AKID'; then
-            echo "::error::包内含明文凭证，禁止公开发布"
+          # 也要抓「$(BOCOS_AK) 未展开」这种字面量，避免 CocoaPods 覆盖 xcconfig 后漏掉
+          if printf '%s' "$AK" | grep -qE 'AKID|\$\('; then
+            echo "::error::包内含明文凭证或未展开变量，禁止公开发布"
             exit 1
           fi
           echo "包内凭证字段为空，可用于公开发布安装页"
