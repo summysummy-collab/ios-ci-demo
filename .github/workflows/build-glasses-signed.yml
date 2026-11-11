@@ -42,7 +42,11 @@ jobs:
   build:
     # macos-14 在该账号下无可用 runner（job 2 秒即 cancelled），
     # 恢复此前成功编译+签名过的 macos-15。
-    runs-on: macos-15
+    # 2026-11-11 晚：macos-15 是 arm64 runner，GitHub 明确提示
+    # "Due to capacity constraints, jobs targeting macOS arm64 runners may
+    # experience longer queue times"，连续 3 次排队满 15 分钟被取消（零 step）。
+    # 改用同版本 macOS 15 的 Intel x64 池，绕开 arm64 容量瓶颈。
+    runs-on: macos-15-intel
     timeout-minutes: 30
     steps:
       - name: 拉取私有源码
