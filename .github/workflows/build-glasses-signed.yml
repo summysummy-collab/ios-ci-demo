@@ -42,7 +42,10 @@ env:
 
 jobs:
   build:
-    runs-on: macos-15
+    # 2026-11-11 下午 macos-15 池连续两次排队 15 分钟仍拿不到 runner，
+    # job 被 GitHub 以 cancelled 结束（steps 一条都没跑）。换池绕开拥堵。
+    # macos-14 镜像同样带 Xcode 16（支持 Swift 6 的 internal import）。
+    runs-on: macos-14
     timeout-minutes: 30
     steps:
       - name: 拉取私有源码
