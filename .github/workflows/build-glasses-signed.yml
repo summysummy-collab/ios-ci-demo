@@ -16,6 +16,11 @@ on:
         description: 私有仓库的分支名或 tag
         required: false
         default: main
+      clean_credentials:
+        description: 清空云同步凭证（公开发布的包必须保持开启）
+        required: false
+        default: true
+        type: boolean
   # 本文件自身变更时也跑一次，便于提交即验证链路
   push:
     branches: [main]
@@ -61,16 +66,21 @@ jobs:
         env:
           BOCOS_AK: ${{ secrets.BOCOS_AK }}
           BOCOS_SK: ${{ secrets.BOCOS_SK }}
+          CLEAN: ${{ inputs.clean_credentials }}
         run: |
           brew install xcodegen
-          # 构建期注入云同步凭证；没配就写空值，App 走「云同步不可用」分支，不影响出包
+          # ★ 公开发布的包必须清空凭证：project.yml 会把 $(BOCOS_AK) 写进 Info.plist，
+          #   带凭证的 ipa 托管到公开安装页等于把 COS key 送出去。
+          #   只有 dispatch 里显式选 clean_credentials=false 才注入真值。
+          #   push 触发时 inputs 为空，也走清空分支（安全默认）。
           mkdir -p Config
+          if [ "$CLEAN" = "false" ]; then AK="$BOCOS_AK"; SK="$BOCOS_SK"; else AK=""; SK=""; fi
           {
-            echo "BOCOS_AK=${BOCOS_AK}"
-            echo "BOCOS_SK=${BOCOS_SK}"
+            echo "BOCOS_AK=${AK}"
+            echo "BOCOS_SK=${SK}"
           } > Config/Secrets.local.xcconfig
-          if [ -z "${BOCOS_AK}" ]; then
-            echo "::warning::未配置 BOCOS_AK/BOCOS_SK，本次包的云同步将不可用（不影响出包）"
+          if [ -z "$AK" ]; then
+            echo "云同步凭证留空（公开发布包）；App 走「云同步不可用」分支，不影响出包"
           fi
           xcodegen generate
 
@@ -181,7 +191,19 @@ jobs:
           echo "登记设备数: $(security cms -D -i "$APP/embedded.mobileprovision" \
             | plutil -extract ProvisionedDevices json -o - - 2>/dev/null | grep -o '"' | wc -l | awk '{print $1/2}')"
 
-      # ipa 里有明文云同步凭证，绝不能放到本仓库的 Release/artifact（全网可下载）。
+      - name: 校验公开包无明文凭证
+        working-directory: src
+        run: |
+          set -euo pipefail
+          unzip -p build/*.ipa Payload/BigOrderMonitor.app/Info.plist > "$RUNNER_TEMP/info.plist"
+          AK=$(plutil -extract BOCosAK raw "$RUNNER_TEMP/info.plist" 2>/dev/null || true)
+          if printf '%s' "$AK" | grep -q 'AKID'; then
+            echo "::error::包内含明文凭证，禁止公开发布"
+            exit 1
+          fi
+          echo "包内凭证字段为空，可用于公开发布安装页"
+
+      # ipa 不落到本仓库的 Release/artifact（public 全网可下载），
       # 走 SRC_PAT 传到私有仓库的 ci-signed，下载仍需登录授权。
       - name: 传到私有仓库 Release
         working-directory: src
