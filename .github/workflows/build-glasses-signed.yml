@@ -27,10 +27,8 @@ on:
     paths:
       - '.github/workflows/build-glasses-signed.yml'
 
-concurrency:
-  group: glasses-signed-${{ github.ref }}
-  cancel-in-progress: true
-
+# 去掉 concurrency：反复 dispatch 时它会把新 run 直接 cancel，
+# 排队中的 job 更容易一直拿不到 runner。改为让每次运行独立排队。
 permissions:
   contents: read # 本仓库只读；推 ipa 用 SRC_PAT 打到私有仓库，不走 GITHUB_TOKEN
 
@@ -42,10 +40,9 @@ env:
 
 jobs:
   build:
-    # 2026-11-11 下午 macos-15 池连续两次排队 15 分钟仍拿不到 runner，
-    # job 被 GitHub 以 cancelled 结束（steps 一条都没跑）。换池绕开拥堵。
-    # macos-14 镜像同样带 Xcode 16（支持 Swift 6 的 internal import）。
-    runs-on: macos-14
+    # macos-14 在该账号下无可用 runner（job 2 秒即 cancelled），
+    # 恢复此前成功编译+签名过的 macos-15。
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - name: 拉取私有源码
