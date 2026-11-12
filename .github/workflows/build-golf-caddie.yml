@@ -17,6 +17,10 @@ on:
         description: 私有仓库的分支名或 tag
         required: false
         default: main
+      runner:
+        description: runner label（macos-15 或 macos-15-intel）
+        required: false
+        default: macos-15
   push:
     branches: [main]
     paths:
@@ -38,10 +42,11 @@ env:
 
 jobs:
   build:
-    # macos-15-intel（x64 池）实测排队 10 分钟都拿不到 runner，已改回 macos-15。
-    # 同仓库的 build-caddie-bridge 用 macos-15 在 2026-11-12 03:04 UTC 成功出包。
-    # 若以后 macos-15 出现 arm64 容量排队，再按 memory 记录的方案换回 intel label。
-    runs-on: macos-15
+    # 免费账号跑 public 仓库的 macOS job 优先级最低，池子紧张时会一直 queued，
+    # 约 15 分钟被 GitHub 直接 cancelled（零 step）。
+    # 对策：label 做成入参，可在 macos-15 / macos-15-intel 两个池子并行派发抢机器。
+    # 两者都是同版本 macOS 15，构建行为一致。
+    runs-on: ${{ inputs.runner || 'macos-15' }}
     timeout-minutes: 40
     steps:
       - name: 拉取私有源码
