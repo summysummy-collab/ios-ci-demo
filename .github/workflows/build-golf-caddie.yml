@@ -38,9 +38,10 @@ env:
 
 jobs:
   build:
-    # macos-15（arm64 池）在该账号下经常排队满 15 分钟被 cancelled；
-    # macos-15-intel 是 x64 池，实测 60 秒内能拿到 runner。
-    runs-on: macos-15-intel
+    # macos-15-intel（x64 池）实测排队 10 分钟都拿不到 runner，已改回 macos-15。
+    # 同仓库的 build-caddie-bridge 用 macos-15 在 2026-11-12 03:04 UTC 成功出包。
+    # 若以后 macos-15 出现 arm64 容量排队，再按 memory 记录的方案换回 intel label。
+    runs-on: macos-15
     timeout-minutes: 40
     steps:
       - name: 拉取私有源码
