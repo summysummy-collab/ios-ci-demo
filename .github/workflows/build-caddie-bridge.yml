@@ -104,7 +104,8 @@ jobs:
             *".$BUNDLE_ID") echo "描述文件匹配 $BUNDLE_ID" ;;
             *) echo "::error::描述文件的 App ID 与 $BUNDLE_ID 不一致"; exit 1 ;;
           esac
-          echo "描述文件已安装：$NAME（UUID 不打印）"
+          # set -u 下 `$NAME（` 会把全角括号算进变量名 → unbound variable，必须用 ${}
+          echo "描述文件已安装：${NAME}（UUID 不打印）"
 
       - name: Archive
         working-directory: src/rokid-caddie-bridge/phone-app
@@ -193,8 +194,8 @@ jobs:
           {
             echo "## 球童桥 · iPhone 端签名包"
             echo ""
-            echo "- 源码：私有仓库 \`$SRC_REPO\`（\`$APP_DIR\`）"
-            echo "- 签名：development 描述文件 \`$PROFILE_NAME\`，bundle id \`$BUNDLE_ID\`"
+            echo "- 源码：私有仓库 \`${SRC_REPO}\`（\`${APP_DIR}\`）"
+            echo "- 签名：development 描述文件 \`${PROFILE_NAME}\`，bundle id \`${BUNDLE_ID}\`"
             echo "- 产物：私有仓库 Release \`ci-signed\`"
             echo "- 装机前提：设备必须在描述文件的登记列表里"
           } >> "$GITHUB_STEP_SUMMARY"
