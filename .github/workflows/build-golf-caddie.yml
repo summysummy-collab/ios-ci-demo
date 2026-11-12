@@ -1,4 +1,5 @@
 name: build-golf-caddie
+# trigger: app icon 1.1 (2) —— AppIcon.appiconset 首次入库
 
 # 在 public 仓库（免额度、日志可审计）里构建私有项目 rokid-caddie 的 AI 球童 iOS 端，
 # 签出可装机 ipa 回传私有仓库 Release ci-signed。
