@@ -215,11 +215,12 @@ jobs:
 
           echo "Bundle ID: $BID · 落网权限已声明"
           echo "体积: $(du -sh "$APP" | cut -f1)"
-          # 只报数量不报 UDID。以前那套 `grep -o '"' | wc -l` 在提取失败时会被 2>/dev/null
-          # 吞掉错误、静默算出 0，看着像「一台设备都装不了」。这里改成失败就明说。
-          if DEV=$(security cms -D -i "$APP/embedded.mobileprovision" \
-                     | plutil -convert json -o - - 2>/dev/null \
-                     | python3 -c 'import json,sys; d=json.load(sys.stdin); v=d.get("ProvisionedDevices"); print(len(v) if v else "不限(非 development 描述文件)")' 2>/dev/null); then
+          # 只报数量不报 UDID。注意两点坑：
+          #   1) `plutil` 不接受 `-` 当输入文件，管道喂进去必然失败，只能用真文件
+          #   2) 老写法 `grep -o '"' | wc -l` 在提取失败时被 2>/dev/null 吞掉，静默算出 0，
+          #      看着像「一台设备都装不了」。这里失败就明说，不猜。
+          security cms -D -i "$APP/embedded.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          if DEV=$(python3 -c 'import plistlib,sys; d=plistlib.load(open(sys.argv[1],"rb")); v=d.get("ProvisionedDevices"); print(len(v) if v else "不限（非 development 描述文件）")' "$RUNNER_TEMP/profile.plist" 2>/dev/null) && [ -n "$DEV" ]; then
             echo "登记设备数: $DEV"
           else
             echo "::warning::无法从描述文件统计登记设备数（不影响 ipa 本身）"
