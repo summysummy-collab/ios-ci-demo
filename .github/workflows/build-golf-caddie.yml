@@ -1,5 +1,5 @@
 name: build-golf-caddie
-# trigger: app icon 1.1 (2) —— 第二池 macos-15-intel 抢占
+# trigger: 1.2 (3) —— 修 cxrl 回调 scheme
 
 # 在 public 仓库（免额度、日志可审计）里构建私有项目 rokid-caddie 的 AI 球童 iOS 端，
 # 签出可装机 ipa 回传私有仓库 Release ci-signed。
