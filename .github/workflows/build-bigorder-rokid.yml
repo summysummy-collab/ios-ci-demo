@@ -29,7 +29,10 @@ env:
 
 jobs:
   build:
-    runs-on: macos-15
+    # 起初用 macos-15，实测排队 9 分钟仍在 queued：macos-15 是 arm64 runner，
+    # GitHub 提示过 arm64 池有容量瓶颈（build-glasses-signed 也踩过，连续 3 次排队
+    # 满 15 分钟被取消）。改用同版本 macOS 15 的 Intel x64 池。
+    runs-on: macos-15-intel
     timeout-minutes: 25
     steps:
       - name: 拉取私有源码
