@@ -215,8 +215,15 @@ jobs:
 
           echo "Bundle ID: $BID · 落网权限已声明"
           echo "体积: $(du -sh "$APP" | cut -f1)"
-          echo "登记设备数: $(security cms -D -i "$APP/embedded.mobileprovision" \
-            | plutil -extract ProvisionedDevices json -o - - 2>/dev/null | grep -o '"' | wc -l | awk '{print $1/2}')"
+          # 只报数量不报 UDID。以前那套 `grep -o '"' | wc -l` 在提取失败时会被 2>/dev/null
+          # 吞掉错误、静默算出 0，看着像「一台设备都装不了」。这里改成失败就明说。
+          if DEV=$(security cms -D -i "$APP/embedded.mobileprovision" \
+                     | plutil -convert json -o - - 2>/dev/null \
+                     | python3 -c 'import json,sys; d=json.load(sys.stdin); v=d.get("ProvisionedDevices"); print(len(v) if v else "不限(非 development 描述文件)")' 2>/dev/null); then
+            echo "登记设备数: $DEV"
+          else
+            echo "::warning::无法从描述文件统计登记设备数（不影响 ipa 本身）"
+          fi
 
       # ipa 不落到本仓库的 Release/artifact（public 全网可下载），
       # 走 SRC_PAT 传到私有仓库的 ci-signed，下载仍需登录授权。
