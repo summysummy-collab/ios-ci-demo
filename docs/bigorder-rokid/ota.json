@@ -1,0 +1,70 @@
+{
+  "schema": 1,
+  "channel": "development",
+  "generatedAt": "2026-11-13T23:59:38Z",
+  "runURL": "https://github.com/summysummy-collab/ios-ci-demo/actions/runs/43530024393",
+  "app": {
+    "id": "bigorder-rokid",
+    "name": "大单监控 · 乐奇版",
+    "label": "乐奇版",
+    "subtitle": "自选股盯盘 + 乐奇眼镜副屏",
+    "bundleId": "com.bigorder.monitor",
+    "platform": "ios",
+    "minOs": "16.0"
+  },
+  "install": {
+    "type": "ios-ota",
+    "manifest": "manifest.plist"
+  },
+  "latest": {
+    "versionName": "2.6.1",
+    "versionCode": "52",
+    "releasedAt": "2026-11-13T23:59:38Z",
+    "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-rokid-ota-2.6.1-b52.ipa",
+    "size": 994508,
+    "sha256": "ca9fea25d2ac221ff6baa1dd552420554990facb80c75fb5845141e76547c919",
+    "notes": [
+      "眼镜副屏：一条 480×352 的单绿 HUD，主图分时 + 副图大单净额，和手机 App 同一套数据口径",
+      "大单门槛与 App 内 Analyzer.analyze 对齐：分钟成交额中位数 ×1.8，下限 100 万，样本不足 15 根上浮 50%",
+      "镜腿前滑 / 后滑切股，切股时按图表指纹去重、5 秒缓存，滑快了不会重复拉行情",
+      "手机起局域网行情桥（8788，避开球童占的 8787），眼镜作客户端订阅；桥不通自动回落直连",
+      "设置页新增「眼镜副屏」：生成一次性配对二维码，扫一下就把自选股交接过去"
+    ],
+    "signing": {
+      "type": "development",
+      "profileName": "bigorder",
+      "devices": 0,
+      "expiresAt": "2027-10-31"
+    }
+  },
+  "history": [
+    {
+      "versionName": "2.6.1",
+      "versionCode": "52",
+      "releasedAt": "2026-11-13T23:59:38Z",
+      "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-rokid-ota-2.6.1-b52.ipa",
+      "size": 994508,
+      "sha256": "ca9fea25d2ac221ff6baa1dd552420554990facb80c75fb5845141e76547c919",
+      "notes": [
+        "眼镜副屏：一条 480×352 的单绿 HUD，主图分时 + 副图大单净额，和手机 App 同一套数据口径",
+        "大单门槛与 App 内 Analyzer.analyze 对齐：分钟成交额中位数 ×1.8，下限 100 万，样本不足 15 根上浮 50%",
+        "镜腿前滑 / 后滑切股，切股时按图表指纹去重、5 秒缓存，滑快了不会重复拉行情",
+        "手机起局域网行情桥（8788，避开球童占的 8787），眼镜作客户端订阅；桥不通自动回落直连",
+        "设置页新增「眼镜副屏」：生成一次性配对二维码，扫一下就把自选股交接过去"
+      ]
+    }
+  ],
+  "agent": {
+    "name": "AIUI 智能体「行情副屏」",
+    "file": "aiui-agent-rokid-2.6.1-b52.aix",
+    "size": 51463,
+    "version": "2.6.1",
+    "page": "pages/quotes/index",
+    "url": "https://github.com/summysummy-collab/bigorder-rokid/releases/tag/ci-signed",
+    "local": false,
+    "notes": [
+      "眼镜端界面、扫码导入、切股逻辑全在智能体里，ipa 只负责喂数据",
+      "装法：aix install 之后必须用 aix launch-page 带上 pages/quotes/index 拉起，否则可能落到别的页面"
+    ]
+  }
+}
