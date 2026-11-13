@@ -117,8 +117,11 @@ jobs:
 
           # 安装页要写「N 台已登记 / 哪天到期」，这两项直接从描述文件读，
           # 换描述文件后页面自动跟着变。只输出数量，不输出 UDID。
-          echo "PROFILE_EXPIRES=$(security cms -D -i "$PROFILE" | plutil -extract ExpirationDate raw -o - - | cut -c1-10)" >> "$GITHUB_ENV"
-          echo "DEVICES=$(security cms -D -i "$PROFILE" | plutil -extract ProvisionedDevices json -o - - 2>/dev/null | jq 'length' 2>/dev/null || echo 0)" >> "$GITHUB_ENV"
+          EXPIRES=$(security cms -D -i "$PROFILE" | plutil -extract ExpirationDate raw -o - - | cut -c1-10)
+          echo "PROFILE_EXPIRES=${EXPIRES}" >> "$GITHUB_ENV"
+          DEVS_JSON=$(security cms -D -i "$PROFILE" | plutil -extract ProvisionedDevices json -o - - 2>/dev/null || echo '[]')
+          DEVICES=$(printf '%s' "$DEVS_JSON" | jq 'length' 2>/dev/null || echo 0)
+          echo "DEVICES=${DEVICES}" >> "$GITHUB_ENV"
 
       - name: Archive
         working-directory: src
@@ -182,7 +185,7 @@ jobs:
           codesign --verify --strict --verbose=2 "$APP" 2>&1 | tail -3
           test -f "$APP/embedded.mobileprovision" || { echo "::error::包内缺描述文件"; exit 1; }
           BID=$(plutil -extract CFBundleIdentifier raw "$APP/Info.plist")
-          [ "$BID" = "$BUNDLE_ID" ] || { echo "::error::Bundle ID 是 $BID，应为 $BUNDLE_ID"; exit 1; }
+          [ "$BID" = "$BUNDLE_ID" ] || { echo "::error::Bundle ID 是 ${BID}，应为 $BUNDLE_ID"; exit 1; }
           echo "Bundle ID: $BID"
           echo "体积: $(du -sh "$APP" | cut -f1)"
           # 只报数量不报 UDID。两个坑：plutil 不接受 `-` 当输入文件；

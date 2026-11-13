@@ -118,7 +118,7 @@ jobs:
           if grep -q '^tools/' list.txt; then
             echo "::error::智能体包里混进了 tools/（.aixignore 未生效）"; exit 1
           fi
-          echo "智能体包就绪：$AIX_NAME（$(du -h "$RUNNER_TEMP/$AIX_NAME" | cut -f1)）"
+          echo "智能体包就绪：${AIX_NAME}（$(du -h "$RUNNER_TEMP/$AIX_NAME" | cut -f1)）"
 
           # 源码 zip 便于人工审查 / 本地导入；.aix 是 CLI 的本地状态，不进包
           cd ..
@@ -128,8 +128,10 @@ jobs:
 
           echo "AGENT_FILE=$AIX_NAME" >> "$GITHUB_ENV"
           echo "AGENT_ZIP=$ZIP_NAME" >> "$GITHUB_ENV"
-          # 体积进安装页的 chips，所以这里就得算好
-          echo "AGENT_SIZE=$(stat -f%z "$RUNNER_TEMP/$AIX_NAME")" >> "$GITHUB_ENV"
+          # 体积进安装页的 chips，所以这里就得算好。
+          # 拆成两行：macOS 自带的 bash 3.2 对 "$(cmd "$var")" 这种嵌套引号不总是稳。
+          AGENT_BYTES=$(stat -f%z "$RUNNER_TEMP/$AIX_NAME")
+          echo "AGENT_SIZE=$AGENT_BYTES" >> "$GITHUB_ENV"
 
       # 所有打印都刻意不输出证书 CN / TeamID / 描述文件 UUID / 设备列表：
       # 本仓库日志对全网公开。完整编译日志可用带认证的 Actions API 在本地拉取分析。
@@ -173,7 +175,7 @@ jobs:
           # 白等十几分钟编译。这里提前拦住。
           case "$BID" in
             *".$BUNDLE_ID") echo "描述文件匹配 $BUNDLE_ID" ;;
-            *) echo "::error::描述文件的 App ID（$BID）与 $BUNDLE_ID 不一致"; exit 1 ;;
+            *) echo "::error::描述文件的 App ID（${BID}）与 $BUNDLE_ID 不一致"; exit 1 ;;
           esac
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
@@ -186,8 +188,8 @@ jobs:
           echo "PROFILE_NAME=${NAME}" >> "$GITHUB_ENV"
           EXPIRES=$(security cms -D -i "$PROFILE" | plutil -extract ExpirationDate raw -o - - | cut -c1-10)
           echo "PROFILE_EXPIRES=${EXPIRES}" >> "$GITHUB_ENV"
-          DEVICES=$(security cms -D -i "$PROFILE" | plutil -extract ProvisionedDevices json -o - - 2>/dev/null \
-                    | jq 'length' 2>/dev/null || echo 0)
+          DEVS_JSON=$(security cms -D -i "$PROFILE" | plutil -extract ProvisionedDevices json -o - - 2>/dev/null || echo '[]')
+          DEVICES=$(printf '%s' "$DEVS_JSON" | jq 'length' 2>/dev/null || echo 0)
           echo "DEVICES=${DEVICES}" >> "$GITHUB_ENV"
 
       - name: Archive
@@ -256,7 +258,7 @@ jobs:
           test -f "$APP/embedded.mobileprovision" || { echo "::error::包内缺描述文件"; exit 1; }
 
           BID=$(plutil -extract CFBundleIdentifier raw "$APP/Info.plist")
-          [ "$BID" = "$BUNDLE_ID" ] || { echo "::error::Bundle ID 是 $BID，应为 $BUNDLE_ID"; exit 1; }
+          [ "$BID" = "$BUNDLE_ID" ] || { echo "::error::Bundle ID 是 ${BID}，应为 $BUNDLE_ID"; exit 1; }
 
           # 眼镜行情桥靠局域网 http://<手机>:8788；iOS 14+ 缺这条说明，真机上
           # 本地网络权限弹窗不出现、桥永远连不上，而编译阶段完全不报错。
