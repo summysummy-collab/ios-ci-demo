@@ -79,12 +79,28 @@
       ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  // 站点被托管在需要 sharecode 的地址时（URL 带 ?sharecode=xxx），
+  // 同源静态资源也得带上它，否则 json / plist / ipa 一律 403。
+  var SHARECODE = (function () {
+    try { return new URLSearchParams(location.search).get('sharecode'); }
+    catch (e) { return null; }
+  })();
+
   // 相对路径按 json 所在目录解析；绝对地址原样返回
   function resolve(rel, dataURL) {
     if (!rel) return '';
     if (/^(https?:|itms-services:|data:)/i.test(rel)) return rel;
-    try { return new URL(rel, new URL(dataURL, document.baseURI)).href; }
+    var url;
+    try { url = new URL(rel, new URL(dataURL, document.baseURI)).href; }
     catch (e) { return rel; }
+    if (SHARECODE && url.indexOf('sharecode=') < 0) {
+      try {
+        if (new URL(url).origin === location.origin) {
+          url += (url.indexOf('?') >= 0 ? '&' : '?') + 'sharecode=' + encodeURIComponent(SHARECODE);
+        }
+      } catch (e2) { /* file:// 之类没有 origin，跳过 */ }
+    }
+    return url;
   }
 
   function itms(manifestURL) {
