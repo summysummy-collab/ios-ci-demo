@@ -1,0 +1,116 @@
+name: build-bigorder-rokid
+
+# 在 public 仓库（免 CI 额度、日志可审计）里编译私有项目 bigorder-rokid。
+# 只回答一个问题：这批 Swift 能不能编过。模拟器 + 不签名，不需要任何签名 secret，
+# 也就不会因为缺证书而在 30 秒内失败。
+# 要出可装机的 ipa 走 build-bigorder-rokid-signed.yml。
+#
+# 为什么需要这个文件：私有仓库 bigorder-rokid 自带的 Build iOS App 已停用
+# （新仓库没有签名 secrets），而私有仓库的 Actions 额度有限。
+# 把「编译校验」放在 public 仓库，推一次就能免费拿到编译结果。
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 私有仓库的分支名或 tag
+        required: false
+        default: main
+  # 本文件自身变更时也跑一次，便于提交即验证链路
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-bigorder-rokid.yml'
+
+permissions:
+  contents: read
+
+env:
+  SRC_REPO: summysummy-collab/bigorder-rokid
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: 拉取私有源码
+        uses: actions/checkout@v4
+        with:
+          repository: summysummy-collab/bigorder-rokid
+          ref: ${{ inputs.ref || 'main' }}
+          token: ${{ secrets.SRC_PAT }}
+          path: src
+          persist-credentials: false # 别把 token 写进 .git/config
+
+      - name: 选择最新 Xcode
+        run: |
+          XCODE_APP=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "using $(basename "$XCODE_APP")"
+          sudo xcode-select -s "$XCODE_APP"
+          xcodebuild -version
+
+      - name: 安装 XcodeGen 并生成工程
+        working-directory: src
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          # 只校验编译，不发包，凭证一律留空：
+          # Config/Secrets.xcconfig 里是空占位，App 启动后走「云同步不可用」分支。
+          mkdir -p Config
+          printf 'BOCOS_AK=\nBOCOS_SK=\n' > Config/Secrets.local.xcconfig
+          xcodegen generate
+          test -d BigOrderMonitor.xcodeproj || { echo "::error::xcodegen 未生成工程"; exit 1; }
+          echo "Swift 源文件数: $(find BigOrderMonitor -name '*.swift' | wc -l | tr -d ' ')"
+
+      # 失败时不打印 build.log：编译错误行会带出源码原文，而本仓库日志是公开的。
+      # 只输出「文件名:行:列」，够定位，不泄内容。
+      - name: 编译（模拟器，不签名）
+        working-directory: src
+        run: |
+          set -o pipefail
+          set +e
+          xcodebuild -project BigOrderMonitor.xcodeproj -scheme BigOrderMonitor \
+            -configuration Release -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            build > build.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::error::编译失败（日志已脱敏，仅输出出错位置）"
+            echo "错误总数: $(grep -c 'error:' build.log || echo 0)"
+            echo "--- 出错位置 ---"
+            grep -oE '[^ /]+\.(swift|m|mm|h|c|cc|cpp):[0-9]+:[0-9]+: error' build.log \
+              | sort -u | head -25 || true
+            # 有些错误没有文件名前缀（链接错误、缺框架），单独捞一行，避免只看到空列表
+            grep -E 'error:' build.log | grep -vE '^[^ ]+\.(swift|m|mm|h|c|cc|cpp):' \
+              | head -6 || true
+            rm -f build.log
+            exit 1
+          fi
+          WARN=$(grep -c 'warning:' build.log || true)
+          rm -f build.log
+          echo "编译通过（warning: $WARN）"
+
+      - name: 产物
+        run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -type d \
+                -path "*/Build/Products/Release-iphonesimulator/BigOrderMonitor.app" 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            echo "产物大小: $(du -sh "$APP" | cut -f1)"
+            echo "架构: $(lipo -archs "$APP/BigOrderMonitor" 2>/dev/null || echo unknown)"
+            # 落网权限是眼镜行情桥的前提，缺了真机上桥永远连不上
+            plutil -extract NSLocalNetworkUsageDescription raw "$APP/Info.plist" > /dev/null 2>&1 \
+              && echo "落网权限说明已声明" \
+              || echo "::warning::包内缺 NSLocalNetworkUsageDescription，真机上眼镜将无法发现手机"
+          else
+            echo "未找到产物"
+          fi
+
+      - name: 摘要
+        if: always()
+        run: |
+          {
+            echo "## bigorder-rokid 编译校验"
+            echo ""
+            echo "- 源码：私有仓库 \`$SRC_REPO\`（临时目录 checkout，源码不进公开日志）"
+            echo "- 范围：模拟器 Release、未签名，不含 AIUI 智能体资源"
+            echo "- 产物：无（这里只验编译，出包见 \`build-bigorder-rokid-signed\`）"
+          } >> "$GITHUB_STEP_SUMMARY"
