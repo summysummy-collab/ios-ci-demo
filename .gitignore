@@ -10,3 +10,6 @@ DerivedData/
 xcuserdata/
 *.ipa
 *.dSYM.zip
+
+# 本地校验 yaml 用的依赖
+node_modules/

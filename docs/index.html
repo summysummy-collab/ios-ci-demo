@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070a">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="大单监控 iOS 内测包装载入口：乐奇版（含眼镜副屏）与标准版，Safari 一键直装">
+<title>大单监控 · iOS 直装</title>
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><i class="dot"></i>OTA Channel · development</div>
+    <h1>大单监控 <em>· iOS 直装</em></h1>
+    <p>乐奇版 / 标准版 · 开发签名 · 用 Safari 打开才能装</p>
+  </header>
+
+  <div class="strip" onclick="location.reload()" title="点击刷新清单">
+    <i class="pulse"></i>
+    <span>清单 <b id="st-schema">v1</b> · 已发布 <b id="st-count">—</b> 个包</span>
+    <span class="right" id="st-sync">读取中…</span>
+  </div>
+
+  <!-- 两个包：乐奇版（含眼镜副屏）排第一，标准版第二 -->
+  <div id="app-cards">
+    <section class="card"><p class="publine" style="margin:0">正在读取清单…</p></section>
+  </div>
+
+  <!-- 智能体卡片由脚本插在这里（只有乐奇版有） -->
+  <div id="agent-card"></div>
+
+  <div class="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ffc85c" stroke-width="1.9" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>
+    </svg>
+    <p><b>两个包是同一个 App（<code>com.bigorder.monitor</code>）。</b>
+      只能装一个，后装的直接覆盖先装的，桌面上不会出现两个图标。想换版本就是再装另一个。</p>
+  </div>
+
+  <div class="note risk">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ff8a8a" stroke-width="1.9" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>
+    </svg>
+    <p><b>只有描述文件里登记过的手机能装。</b>当前这份是 Apple Development 签名，
+      只登记了 1 台设备，换手机装会报「无法安装此应用」——得先去 Apple Developer 后台加 UDID、
+      重签描述文件、再重跑一次出包。另外 iOS 的 OTA 安装<b>只认 Safari</b>，
+      微信、QQ 和第三方浏览器点下去是静默失败，没有任何提示。</p>
+  </div>
+
+  <div class="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ffc85c" stroke-width="1.9" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>
+    </svg>
+    <p><b>这里的包云同步凭证是空的。</b>为了能放在公网匿名下载，包内 <code>BOCosAK/SK</code>
+      在出包时被置空：盯盘、大单分析、眼镜副屏全都正常，<b>只有「云端同步自选股」不可用</b>。
+      要云同步请去私有仓库 Release <code>ci-signed</code> 取完整版，用 Xcode 或 Apple Configurator 装。</p>
+  </div>
+
+  <h3>扫码在手机上打开</h3>
+  <section class="card">
+    <div class="qr-wrap">
+      <div class="qr-box" id="qr"></div>
+      <div class="qr-meta">
+        <p>手机扫码 → 打开本页 → 点「在 iPhone 上安装」。<b style="color:#ffc85c">扫描后如果落在微信里，点右上角「…」→ 在 Safari 中打开。</b></p>
+        <div class="url" id="qr-url">—</div>
+        <button class="btn ghost" onclick="copyText(document.getElementById('qr-url').textContent.trim(),'页面链接已复制')">复制页面链接</button>
+      </div>
+    </div>
+  </section>
+
+  <h3>OTA 清单</h3>
+  <section class="card">
+    <dl style="margin:0" id="mf-list">
+      <div class="kv stack"><dt>清单地址</dt><dd id="mf-url">—</dd></div>
+    </dl>
+    <div class="kv"><dt>协议版本</dt><dd>schema 1 · JSON</dd></div>
+    <div class="kv"><dt>设备目标</dt><dd>iPhone / iPad · iOS 16+</dd></div>
+    <div class="kv"><dt>更新时间</dt><dd id="mf-time">—</dd></div>
+
+    <pre><span class="c"># 查最新版本号 / SHA-256（以乐奇版为例）</span>
+curl -s <span id="mf-curl">./bigorder-rokid/ota.json</span> | head -40
+<span class="c"># 校验已下载的 ipa</span>
+shasum -a 256 BigOrderMonitor-rokid-ota-*.ipa</pre>
+
+    <details>
+      <summary>清单字段说明（要不要做应用内更新检查）</summary>
+      <div class="body">
+        每个包一份 <code>ota.json</code>，由出包流程覆盖写入，页面只读不写。<br>
+        关键字段：<code>latest.versionName</code> / <code>versionCode</code>（对应 CFBundleShortVersionString /
+        CFBundleVersion）、<code>url</code>、<code>size</code>、<code>sha256</code>、<code>notes</code>、
+        <code>signing.devices</code>（描述文件登记设备数）。<br>
+        <code>history</code> 是同一份文件里累积的旧版本，发新版时流程会把上一条挤进历史、最多留 8 条。<br>
+        iOS 侧真正被系统读的是 <code>manifest.plist</code>（<code>itms-services</code> 的
+        <code>url</code> 参数指向它），里面的 ipa 地址是绝对路径，换域名要重跑一次出包。
+      </div>
+    </details>
+  </section>
+
+  <h3>版本历史</h3>
+  <section class="card" id="history">
+    <p class="publine" style="margin:0">读取中…</p>
+  </section>
+
+  <h3>安装到 iPhone</h3>
+
+  <div class="method">
+    <div class="method-head"><span class="badge">推荐</span><strong>Safari 直装（OTA）</strong></div>
+    <p class="mini">不用连电脑，装完就能用；覆盖安装不丢自选股。</p>
+    <ol class="steps">
+      <li>用 <b>iPhone 的 Safari</b> 打开本页（微信里点右上角「…」→ 在 Safari 中打开）。</li>
+      <li>点对应版本的「在 iPhone 上安装」，弹窗点「安装」。</li>
+      <li>回桌面等图标出现（几秒到半分钟，装的是 1 MB 不到的包）；找不到就下拉搜索「大单」。</li>
+    </ol>
+  </div>
+
+  <div class="method">
+    <div class="method-head"><span class="badge alt">备选</span><strong>电脑 + Apple Configurator / Xcode</strong></div>
+    <p class="mini">OTA 死活装不上、或者要装带云同步凭证的完整版时走这条。</p>
+    <ol class="steps">
+      <li>点「下载 .ipa（电脑用）」，或用私有仓库 Release <code class="inline">ci-signed</code> 里的完整版。</li>
+      <li>手机连电脑，打开 <code class="inline">Apple Configurator</code> → 添加 → App → 选 ipa。</li>
+      <li>或者 Xcode → Window → Devices and Simulators → 把 ipa 拖到设备上。</li>
+    </ol>
+  </div>
+
+  <div class="note">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#ffc85c" stroke-width="1.9" stroke-linecap="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>
+    </svg>
+    <p><b>乐奇版和标准版装的是同一个 App。</b>标准版（原版）里没有「设置 → 眼镜副屏」这一项，
+      眼镜端也就连不上——想用副屏必须先装乐奇版。</p>
+  </div>
+
+  <h3>眼镜端怎么接上</h3>
+
+  <div class="method">
+    <div class="method-head"><span class="badge">乐奇版</span><strong>扫码交接自选股 + 局域网行情桥</strong></div>
+    <p class="mini">眼镜不给第三方 App 开网络服务，所以反过来：手机当服务端，眼镜当客户端。</p>
+    <ol class="steps">
+      <li>手机装好<b>乐奇版</b>，打开 App → 设置 → <b>眼镜副屏</b> → 生成配对二维码（一次性载荷，只含代码和名称）。</li>
+      <li>眼镜端进 AIUI 智能体「行情副屏」→ 扫码导入，自选股就过去了，不用一个个敲。</li>
+      <li>同一个设置页打开<b>局域网行情桥</b>：手机在 <code class="inline">8788</code> 端口起 HTTP + SSE 服务，眼镜订阅。</li>
+      <li>镜腿<b>前滑 / 后滑</b>切上一只 / 下一只；350 ms 内的连滑会合并成一次，不会一次跳三只。</li>
+    </ol>
+    <p class="publine">顶栏角标 <b>桥</b> = 走手机推的数据；<b>直连</b> = 手机桥不通，眼镜自己拉公开行情源兜底。
+      看到「直连」说明手机那侧的开关没开、或者两台设备不在同一个 Wi-Fi。</p>
+  </div>
+
+  <div class="method">
+    <div class="method-head"><span class="badge alt">智能体</span><strong>导入 .aix</strong></div>
+    <p class="mini">智能体不在 ipa 里，它得单独装到眼镜上。</p>
+    <ol class="steps">
+      <li>装上 <code class="inline">aix-cli</code>：<code class="inline">npm i -g @yodaos-pkg/aix-cli</code>。</li>
+      <li>眼镜连上电脑，执行 <code class="inline">aix install ./aiui-agent-rokid-*.aix</code>。</li>
+      <li>用 <code class="inline">aix launch-page ./aiui-agent-rokid-*.aix pages/quotes/index</code> 拉起行情页（务必带页面路径）。</li>
+    </ol>
+  </div>
+
+  <h3>校验与排错</h3>
+  <div class="method">
+    <ol class="steps">
+      <li><b>「无法安装此应用」</b>：手机 UDID 不在描述文件里，或描述文件过期了。换设备必须先加 UDID 重签。</li>
+      <li><b>点安装毫无反应</b>：不在 Safari（微信/QQ/Chrome 都会静默失败），或者页面是用 http 打开的。复制链接到 Safari 重开。</li>
+      <li><b>装完桌面没有图标</b>：桌面下拉搜「大单」；还是找不到就说明安装中途被取消了，重装一次。</li>
+      <li><b>分不清装的哪个版本</b>：设置里有没有「眼镜副屏」——有就是乐奇版。</li>
+      <li><b>副屏一直显示「直连」</b>：手机端行情桥没起来。确认开关打开、两台设备同一个 Wi-Fi、首次允许「本地网络」权限；8788 被占就在设置里换端口。</li>
+      <li><b>副屏没图 / 一直是横线</b>：先确认这只股在自选里、当日有成交。收盘后没有分时增量，副图大单柱自然是空的。</li>
+      <li><b>切股没反应</b>：滑动要在镜腿外侧的触控区，轻扫而不是长按；页面还在拉数据时滑动会被丢掉。</li>
+      <li><b>校验包是否被截断</b>：<code class="inline">shasum -a 256</code> 结果要和页面上一致，不一致就重下。</li>
+    </ol>
+  </div>
+
+  <footer>
+    <b>大单监控 · iOS</b><br>
+    乐奇版：SwiftUI + Network.framework 行情桥 · 眼镜端 AIUI 单绿 HUD<br>
+    标准版：原始 iOS 盯盘 App，不含眼镜副屏<br>
+    开发签名仅供内测，不可用于正式分发
+  </footer>
+</div>
+
+<div class="toast" id="toast">已复制</div>
+
+<script>
+/* 内联兜底：ota.json 取不到时（离线、或站点只搬了页面没搬 json）照常渲染，
+   状态条会标明「清单离线 · 内置缓存」。正常情况以下数据会被 ota.json 覆盖。 */
+var FB_ROKID = {
+  schema: 1, channel: 'development', generatedAt: null,
+  app: { id: 'bigorder-rokid', name: '大单监控 · 乐奇版', label: '乐奇版',
+         subtitle: '自选股盯盘 + 乐奇眼镜副屏', bundleId: 'com.bigorder.monitor',
+         platform: 'ios', minOs: '16.0' },
+  install: { type: 'ios-ota', manifest: 'manifest.plist' },
+  latest: { versionName: '2.6.1', versionCode: 52, releasedAt: null, url: '', size: 0, sha256: '',
+            notes: ['主图当日分时，副图大单净额，一条 480×352 的单绿 HUD',
+                    '镜腿前滑 / 后滑切股，连滑 350ms 内合并成一次',
+                    '手机起 8788 行情桥，桥不通自动回落直连行情源'],
+            signing: { type: 'development', profileName: 'bigorder', devices: 1, expiresAt: '' } },
+  agent: { name: 'AIUI 智能体「行情副屏」', file: 'aiui-agent-rokid-2.6.1-b52.aix',
+           size: 51466, version: '2.6.1', page: 'pages/quotes/index',
+           notes: ['眼镜上的界面、扫码、切股逻辑全在这里，ipa 只负责喂数据'] },
+  history: []
+};
+
+var FB_IOS = {
+  schema: 1, channel: 'development', generatedAt: null,
+  app: { id: 'bigorder-ios', name: '大单监控', label: '标准版',
+         subtitle: '原始 iOS 盯盘 App', bundleId: 'com.bigorder.monitor',
+         platform: 'ios', minOs: '16.0' },
+  install: { type: 'ios-ota', manifest: 'manifest.plist' },
+  latest: { versionName: '—', versionCode: '', releasedAt: null, url: '', size: 0, sha256: '',
+            notes: ['原版盯盘：自选股、分时、大单分析', '不含眼镜副屏与局域网行情桥'],
+            signing: { type: 'development', profileName: 'bigorder', devices: 1, expiresAt: '' } },
+  history: []
+};
+
+window.OTA_CFG = {
+  apps: [
+    { slug: 'bigorder-rokid', data: 'bigorder-rokid/ota.json', fallback: FB_ROKID },
+    { slug: 'bigorder-ios',   data: 'bigorder-ios/ota.json',   fallback: FB_IOS }
+  ]
+};
+</script>
+<script src="qrcode.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

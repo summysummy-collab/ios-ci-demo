@@ -29,6 +29,8 @@ permissions:
 
 env:
   SRC_REPO: summysummy-collab/bigorder-rokid
+  # OTA 包（云同步凭证置空）与安装页都落在这个公开仓库
+  OTA_REPO: summysummy-collab/ios-ci-demo
   PROJECT: BigOrderMonitor.xcodeproj
   SCHEME: BigOrderMonitor
   BUNDLE_ID: com.bigorder.monitor
@@ -87,6 +89,48 @@ jobs:
           echo "APP_BUILD=${BUILD}" >> "$GITHUB_ENV"
           echo "版本: ${VER} (${BUILD})"
 
+      # 智能体和 ipa 是两套东西：ipa 装手机，.aix 装眼镜。一起发到同一个 Release，
+      # 免得「装了 App 忘了装智能体」。
+      - name: 打包眼镜端智能体（.aix）
+        working-directory: src/aiui-agent
+        run: |
+          set -euo pipefail
+          # 官方 CLI，纯 Node 实现（无平台二进制），macOS runner 直接跑
+          npm install -g @yodaos-pkg/aix-cli > /dev/null
+          test -f .aixignore || { echo "::error::缺 .aixignore，打包会把 tools/ 和冗余 vendor 一起塞进去"; exit 1; }
+
+          AIX_NAME="aiui-agent-rokid-${APP_VER}-b${APP_BUILD}.aix"
+          ZIP_NAME="aiui-agent-rokid-src-${APP_VER}-b${APP_BUILD}.zip"
+          aix pack . -o "$RUNNER_TEMP/$AIX_NAME" > pack.log 2>&1 || {
+            echo "::error::aix pack 失败"; tail -20 pack.log; exit 1; }
+          tail -2 pack.log
+
+          # 断言包内容。这几条对应真机上会直接崩的三个点：
+          #   pages/*.ink 缺了 → 智能体没有页面
+          #   lib/*.js 缺了 → 行情和大单全废
+          #   vendor/webpjs 缺了 → 扫码解码挂掉（webp.js 把它当字符串内联）
+          aix list "$RUNNER_TEMP/$AIX_NAME" > list.txt
+          for f in app.json app.js AGENTS.md pages/quotes/index.ink pages/scan/index.ink \
+                   lib/market.js lib/hud.js lib/bridge.js lib/webp.js \
+                   lib/vendor/webpjs/webpjs.source.js; do
+            grep -q "^$f:" list.txt || { echo "::error::智能体包缺 $f"; exit 1; }
+          done
+          if grep -q '^tools/' list.txt; then
+            echo "::error::智能体包里混进了 tools/（.aixignore 未生效）"; exit 1
+          fi
+          echo "智能体包就绪：$AIX_NAME（$(du -h "$RUNNER_TEMP/$AIX_NAME" | cut -f1)）"
+
+          # 源码 zip 便于人工审查 / 本地导入；.aix 是 CLI 的本地状态，不进包
+          cd ..
+          zip -q -r "$RUNNER_TEMP/$ZIP_NAME" aiui-agent \
+            -x 'aiui-agent/.aix/*' 'aiui-agent/*.log'
+          echo "源码包就绪：$ZIP_NAME"
+
+          echo "AGENT_FILE=$AIX_NAME" >> "$GITHUB_ENV"
+          echo "AGENT_ZIP=$ZIP_NAME" >> "$GITHUB_ENV"
+          # 体积进安装页的 chips，所以这里就得算好
+          echo "AGENT_SIZE=$(stat -f%z "$RUNNER_TEMP/$AIX_NAME")" >> "$GITHUB_ENV"
+
       # 所有打印都刻意不输出证书 CN / TeamID / 描述文件 UUID / 设备列表：
       # 本仓库日志对全网公开。完整编译日志可用带认证的 Actions API 在本地拉取分析。
       - name: 导入签名证书
@@ -136,6 +180,15 @@ jobs:
           cp "$PROFILE" "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
           # set -u 下 `$NAME（` 会把全角括号算进变量名 → unbound variable，必须用 ${}
           echo "描述文件已安装：${NAME}（UUID 不打印）"
+
+          # 安装页要展示「N 台已登记 / 描述文件哪天到期」，这两项从描述文件直接读，
+          # 不手写在页面里，换描述文件后自动跟着变。只输出数量，不输出 UDID。
+          echo "PROFILE_NAME=${NAME}" >> "$GITHUB_ENV"
+          EXPIRES=$(security cms -D -i "$PROFILE" | plutil -extract ExpirationDate raw -o - - | cut -c1-10)
+          echo "PROFILE_EXPIRES=${EXPIRES}" >> "$GITHUB_ENV"
+          DEVICES=$(security cms -D -i "$PROFILE" | plutil -extract ProvisionedDevices json -o - - 2>/dev/null \
+                    | jq 'length' 2>/dev/null || echo 0)
+          echo "DEVICES=${DEVICES}" >> "$GITHUB_ENV"
 
       - name: Archive
         working-directory: src
@@ -240,8 +293,143 @@ jobs:
           gh release view ci-signed -R "$SRC_REPO" > /dev/null 2>&1 \
             || gh release create ci-signed -R "$SRC_REPO" \
                  --title "CI 已签名包（自动覆盖）" --notes "由 public 仓库 Actions 构建" > /dev/null
-          gh release upload ci-signed "$RUNNER_TEMP/$OUT" -R "$SRC_REPO" --clobber
-          echo "已上传 $OUT 到 $SRC_REPO Release ci-signed"
+          gh release upload ci-signed "$RUNNER_TEMP/$OUT" "$RUNNER_TEMP/$AGENT_FILE" \
+            "$RUNNER_TEMP/$AGENT_ZIP" -R "$SRC_REPO" --clobber
+          echo "已上传 $OUT / $AGENT_FILE / $AGENT_ZIP 到 $SRC_REPO Release ci-signed"
+
+      # ── OTA 专用版 ────────────────────────────────────────────────────────────
+      # ipa 的 Info.plist 里带着明文云同步凭证（BOCosAK/BOCosSK）。放在私有 Release
+      # 没问题，但 OTA 安装要求 ipa 能被手机匿名 GET —— 一旦公开就等于公开密钥。
+      # 所以这里重编一次：删掉本地 Secrets.local.xcconfig，#include? 退化成空占位，
+      # 凭证变成空字符串。代价是 OTA 版没有云同步，其余功能完全一致。
+      - name: OTA 版：去掉云同步凭证并重新归档
+        working-directory: src
+        run: |
+          set -euo pipefail
+          # xcconfig 是「后赋值覆盖前赋值」，#include? 在文件末尾，删掉 local 文件即回到空占位。
+          # 先确认这个结构没变，否则置空会静默失效、凭证照样打进包里。
+          grep -q '#include? "Secrets.local.xcconfig"' Config/Secrets.xcconfig \
+            || { echo "::error::Secrets.xcconfig 的 include 结构变了，置空方案失效，拒绝继续"; exit 1; }
+          rm -f Config/Secrets.local.xcconfig
+
+          rm -rf build-ota && mkdir -p build-ota
+          set +e
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" \
+            -configuration Release -destination "generic/platform=iOS" \
+            -archivePath build-ota/ota.xcarchive archive > build-ota.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "::error::OTA 版归档失败"
+            grep -oE '[^ /]+\.(swift|m|h):[0-9]+:[0-9]+: error' build-ota.log | sort -u | head -20 || true
+            rm -f build-ota.log
+            exit 1
+          fi
+          rm -f build-ota.log
+          echo "OTA 版归档通过"
+
+      - name: OTA 版：导出并校验凭证已清空
+        working-directory: src
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive -archivePath build-ota/ota.xcarchive \
+            -exportPath build-ota -exportOptionsPlist exportOptions.plist > export-ota.log 2>&1 || {
+              echo "::error::OTA 版导出失败"; tail -20 export-ota.log; exit 1; }
+          IPA=$(ls "$PWD"/build-ota/*.ipa | head -1)
+          ls -lh "$IPA"
+
+          rm -rf chk-ota && mkdir chk-ota && cd chk-ota
+          unzip -q "$IPA"
+          APP=$(find Payload -maxdepth 1 -name "*.app" | head -1)
+
+          # 硬护栏：这两个值为空才允许上传到公开位置。宁可让 CI 红一次，
+          # 也不能把带真实密钥的包推到全网可下载的 Release。
+          AK=$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb")).get("BOCosAK","") or "")' "$APP/Info.plist")
+          SK=$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb")).get("BOCosSK","") or "")' "$APP/Info.plist")
+          if [ -n "$AK" ] || [ -n "$SK" ]; then
+            echo "::error::OTA 包里的云同步凭证没被清空（AK 长度 ${#AK}），拒绝上传公开仓库"
+            exit 1
+          fi
+          echo "护栏通过：BOCosAK / BOCosSK 均为空"
+
+          codesign --verify --strict --verbose=2 "$APP" 2>&1 | tail -2
+          echo "OTA 版体积: $(du -sh "$APP" | cut -f1)"
+
+      - name: OTA 版：上传公开 Release
+        working-directory: src
+        env:
+          GH_TOKEN: ${{ secrets.SRC_PAT }}
+        run: |
+          set -euo pipefail
+          IPA=$(ls "$PWD"/build-ota/*.ipa | head -1)
+          OTA_NAME="BigOrderMonitor-rokid-ota-${APP_VER}-b${APP_BUILD}.ipa"
+          cp "$IPA" "$RUNNER_TEMP/$OTA_NAME"
+
+          echo "OTA_FILE=$OTA_NAME" >> "$GITHUB_ENV"
+          echo "OTA_SIZE=$(stat -f%z "$RUNNER_TEMP/$OTA_NAME")" >> "$GITHUB_ENV"
+          echo "OTA_SHA=$(shasum -a 256 "$RUNNER_TEMP/$OTA_NAME" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+          gh release view ota -R "$OTA_REPO" > /dev/null 2>&1 \
+            || gh release create ota -R "$OTA_REPO" --title "OTA 测试版（公开分发）" \
+                 --notes "OTA 专用包：云同步凭证已置空，其余功能与完整版一致。完整版见各自私有仓库的 ci-signed。" > /dev/null
+          # 只留最新一个：清掉同名前缀的旧包，避免 Release 里堆一长串过期 ipa
+          OLD=$(gh release view ota -R "$OTA_REPO" --json assets -q '.assets[].name' 2>/dev/null \
+                | grep -E '^BigOrderMonitor-rokid-ota-' || true)
+          for n in $OLD; do
+            gh release delete-asset ota "$n" -R "$OTA_REPO" --yes > /dev/null 2>&1 || true
+          done
+          gh release upload ota "$RUNNER_TEMP/$OTA_NAME" -R "$OTA_REPO" --clobber
+          echo "已上传 $OTA_NAME 到 $OTA_REPO Release ota"
+
+      - name: OTA 版：更新安装页与 manifest
+        env:
+          GH_TOKEN: ${{ secrets.SRC_PAT }}
+        run: |
+          set -euo pipefail
+          SLUG=bigorder-rokid
+          SITE="$RUNNER_TEMP/site"
+          IPA_URL="https://github.com/${OTA_REPO}/releases/download/ota/${OTA_FILE}"
+
+          rm -rf "$SITE"
+          git clone --quiet --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${OTA_REPO}.git" "$SITE"
+          cd "$SITE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p "docs/$SLUG"
+
+          # 清单与 manifest.plist 都由 tools/ota_json.py 生成（脚本随站点一起提交）。
+          # 抽成脚本的原因：jq 表达式和手拼 XML 都只能在 CI 里试错，这个本地能跑。
+          # 它读同目录的 notes.json 取发版说明，并把上一条 latest 挤进 history（最多 8 条）。
+          python3 tools/ota_json.py --site docs --slug "$SLUG" \
+            --name "大单监控 · 乐奇版" --label "乐奇版" \
+            --subtitle "自选股盯盘 + 乐奇眼镜副屏" \
+            --bundle-id "$BUNDLE_ID" --version "$APP_VER" --build "$APP_BUILD" \
+            --ipa-url "$IPA_URL" --size "${OTA_SIZE:-0}" --sha256 "$OTA_SHA" \
+            --profile-name "${PROFILE_NAME:-bigorder}" --devices "${DEVICES:-0}" \
+            --expires "${PROFILE_EXPIRES:-}" \
+            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --agent-file "$AGENT_FILE" --agent-size "${AGENT_SIZE:-0}" \
+            --agent-url "https://github.com/${SRC_REPO}/releases/tag/ci-signed" \
+            --agent-notes "眼镜端界面、扫码导入、切股逻辑全在智能体里，ipa 只负责喂数据,装法：aix install 之后必须用 aix launch-page 带上 pages/quotes/index 拉起，否则可能落到别的页面"
+
+          # 站点是 main/docs，GitHub Pages 直接吃这个目录；所有包共用一张总览页，
+          # 每个包只往自己的子目录写 ota.json + manifest.plist。
+          git add "docs/$SLUG"
+          if git diff --cached --quiet; then
+            echo "站点内容无变化，跳过提交"
+          else
+            git commit -q -m "chore(ota): bigorder-rokid ${APP_VER} (b${APP_BUILD}) [skip ci]"
+            pushed=0
+            for i in 1 2 3; do
+              if git push --quiet origin HEAD:main; then pushed=1; break; fi
+              echo "推送冲突，rebase 后重试（第 $i 次）"
+              git pull --rebase --quiet origin main || true
+            done
+            [ "$pushed" = "1" ] || { echo "::error::安装页推送失败，可能被并发构建抢占"; exit 1; }
+            echo "安装页已更新：https://${OTA_REPO%%/*}.github.io/${OTA_REPO##*/}/"
+          fi
 
       - name: 摘要
         if: always()
@@ -252,8 +440,18 @@ jobs:
             echo "- 版本：\`${APP_VER:-?}\` (build \`${APP_BUILD:-?}\`)"
             echo "- 源码：私有仓库 \`$SRC_REPO\`（临时目录 checkout，源码不进公开日志）"
             echo "- 签名：development 描述文件 \`$PROFILE_NAME\`，bundle id \`$BUNDLE_ID\`"
-            echo "- 产物：私有仓库 Release \`ci-signed\` 下的 \`BigOrderMonitor-rokid-${APP_VER:-?}-b${APP_BUILD:-?}.ipa\`"
-            echo "- 装机前提：设备必须在描述文件登记列表里"
+            echo ""
+            echo "### 产物"
+            echo ""
+            echo "| 内容 | 位置 | 能不能公开 |"
+            echo "|---|---|---|"
+            echo "| ipa（含云同步凭证） | \`$SRC_REPO\` Release \`ci-signed\` | 否，私有 |"
+            echo "| 智能体 \`.aix\` | \`$SRC_REPO\` Release \`ci-signed\` | 否，私有 |"
+            echo "| 智能体源码 \`.zip\` | \`$SRC_REPO\` Release \`ci-signed\` | 否，私有 |"
+            echo "| ipa（凭证已置空） | OTA Release \`ota\` | 是，供安装页 |"
+            echo ""
+            echo "- 眼镜端智能体：\`${AGENT_FILE:-（未打包）}\`，装完 App 后在「设置 → 眼镜副屏」配对"
+            echo "- OTA 安装页：https://${OTA_REPO%%/*}.github.io/${OTA_REPO##*/}/"
             echo "- ⚠️ bundle id 与正式「大单监控」相同，装上会覆盖原 App"
-            echo "- 眼镜端智能体不在 ipa 里，需用 AIUI 工具单独把 \`aiui-agent/\` 装到眼镜"
+            echo "- ⚠️ OTA 版云同步不可用；要云同步请用私有 Release 的完整版"
           } >> "$GITHUB_STEP_SUMMARY"
