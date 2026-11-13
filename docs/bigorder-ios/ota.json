@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "channel": "development",
+  "generatedAt": "2026-11-13T23:51:25Z",
+  "runURL": "https://github.com/summysummy-collab/ios-ci-demo/actions/runs/43529569739",
+  "app": {
+    "id": "bigorder-ios",
+    "name": "大单监控",
+    "label": "标准版",
+    "subtitle": "自选股大单监控（原始 iOS 版）",
+    "bundleId": "com.bigorder.monitor",
+    "platform": "ios",
+    "minOs": "16.0"
+  },
+  "install": {
+    "type": "ios-ota",
+    "manifest": "manifest.plist"
+  },
+  "latest": {
+    "versionName": "2.5.25",
+    "versionCode": "50",
+    "releasedAt": "2026-11-13T23:51:25Z",
+    "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-ota-2.5.25-b50.ipa",
+    "size": 942034,
+    "sha256": "d56e46aaa7bac5c9695bc99ef844204b0a26f8cfe9359835371b63ea7cc60ae2",
+    "notes": [
+      "原始 iOS 盯盘 App：自选股、分时、大单分析",
+      "不含眼镜副屏与局域网行情桥，想用副屏请装乐奇版"
+    ],
+    "signing": {
+      "type": "development",
+      "profileName": "bigorder",
+      "devices": 0,
+      "expiresAt": "2027-10-31"
+    }
+  },
+  "history": [
+    {
+      "versionName": "2.5.25",
+      "versionCode": "50",
+      "releasedAt": "2026-11-13T23:51:25Z",
+      "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-ota-2.5.25-b50.ipa",
+      "size": 942034,
+      "sha256": "d56e46aaa7bac5c9695bc99ef844204b0a26f8cfe9359835371b63ea7cc60ae2",
+      "notes": [
+        "原始 iOS 盯盘 App：自选股、分时、大单分析",
+        "不含眼镜副屏与局域网行情桥，想用副屏请装乐奇版"
+      ]
+    }
+  ]
+}
