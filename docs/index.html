@@ -54,9 +54,9 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="#ffc85c" stroke-width="1.9" stroke-linecap="round">
       <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>
     </svg>
-    <p><b>这里的包云同步凭证是空的。</b>为了能放在公网匿名下载，包内 <code>BOCosAK/SK</code>
-      在出包时被置空：盯盘、大单分析、眼镜副屏全都正常，<b>只有「云端同步自选股」不可用</b>。
-      要云同步请去私有仓库 Release <code>ci-signed</code> 取完整版，用 Xcode 或 Apple Configurator 装。</p>
+    <p><b>这个包自带云同步凭证，装完不用填任何东西。</b>「云端同步自选股」开箱可用，
+      启动和回前台各自动同步一次。凭证随 ipa 公开（只授这一个桶的一个对象），
+      最坏情况是同步文件被人写脏，行情、大单和眼镜副屏不受影响。</p>
   </div>
 
   <h3>扫码在手机上打开</h3>
@@ -118,7 +118,7 @@ shasum -a 256 BigOrderMonitor-rokid-ota-*.ipa</pre>
 
   <div class="method">
     <div class="method-head"><span class="badge alt">备选</span><strong>电脑 + Apple Configurator / Xcode</strong></div>
-    <p class="mini">OTA 死活装不上、或者要装带云同步凭证的完整版时走这条。</p>
+    <p class="mini">OTA 死活装不上，或者就想用数据线装时走这条。</p>
     <ol class="steps">
       <li>点「下载 .ipa（电脑用）」，或用私有仓库 Release <code class="inline">ci-signed</code> 里的完整版。</li>
       <li>手机连电脑，打开 <code class="inline">Apple Configurator</code> → 添加 → App → 选 ipa。</li>
@@ -192,14 +192,15 @@ var FB_ROKID = {
          subtitle: '自选股盯盘 + 乐奇眼镜副屏', bundleId: 'com.bigorder.monitor',
          platform: 'ios', minOs: '16.0' },
   install: { type: 'ios-ota', manifest: 'manifest.plist' },
-  latest: { versionName: '2.6.1', versionCode: 52, releasedAt: null, url: '', size: 0, sha256: '',
-            notes: ['主图当日分时，副图大单净额，一条 480×352 的单绿 HUD',
-                    '镜腿前滑 / 后滑切股，连滑 350ms 内合并成一次',
-                    '手机起 8788 行情桥，桥不通自动回落直连行情源'],
+  latest: { versionName: '2.6.4', versionCode: 55, releasedAt: null, url: '', size: 0, sha256: '',
+            notes: ['云同步凭证已内置进包，装完直接能同步，不用再手填',
+                    '手机侧探活不再排主线程，App 开久了眼镜也能立刻连上',
+                    '断线重连改阶梯重试，SSE 首帧超时放宽到 12 秒'],
             signing: { type: 'development', profileName: 'bigorder', devices: 1, expiresAt: '' } },
-  agent: { name: 'AIUI 智能体「行情副屏」', file: 'aiui-agent-rokid-2.6.1-b52.aix',
-           size: 51466, version: '2.6.1', page: 'pages/quotes/index',
-           notes: ['眼镜上的界面、扫码、切股逻辑全在这里，ipa 只负责喂数据'] },
+  agent: { name: 'AIUI 智能体「自选盯盘」', file: 'aiui-agent-rokid-2.6.9-b54.aix',
+           size: 61149, version: '2.6.9', page: 'pages/quotes/index',
+           notes: ['不开热点也能连：页面扫常见网段找手机，扫不到就说「连 192.168.x.x」',
+                   '眼镜上的界面、扫码、切股逻辑全在这里，ipa 只负责喂数据'] },
   history: []
 };
 
