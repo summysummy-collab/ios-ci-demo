@@ -1,5 +1,5 @@
 name: build-golf-caddie
-# trigger: 1.16 (17) —— 删掉眼镜 APK 链路，只留 AIUI 局域网桥
+# trigger: 1.17 (18) —— 同局域网可用：页面扫网段找手机，本机地址优先 WiFi 网卡
 #
 # 这一行是**触发位**：细粒度 PAT 没有 Actions:write 时无法 workflow_dispatch，
 # 改这一行再 push 本文件即可起一次构建（workflow 自带 on.push 针对本文件）。
