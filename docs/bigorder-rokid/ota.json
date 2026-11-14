@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "channel": "development",
-  "generatedAt": "2026-11-13T23:59:38Z",
-  "runURL": "https://github.com/summysummy-collab/ios-ci-demo/actions/runs/43530024393",
+  "generatedAt": "2026-11-14T02:07:03Z",
+  "runURL": "https://github.com/summysummy-collab/ios-ci-demo/actions/runs/43543824403",
   "app": {
     "id": "bigorder-rokid",
     "name": "大单监控 · 乐奇版",
@@ -19,10 +19,10 @@
   "latest": {
     "versionName": "2.6.1",
     "versionCode": "52",
-    "releasedAt": "2026-11-13T23:59:38Z",
+    "releasedAt": "2026-11-14T02:07:03Z",
     "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-rokid-ota-2.6.1-b52.ipa",
-    "size": 994508,
-    "sha256": "ca9fea25d2ac221ff6baa1dd552420554990facb80c75fb5845141e76547c919",
+    "size": 996770,
+    "sha256": "4361b60d931076c49949ffd146a65760f1af0db78c66b192816539ed689b6979",
     "notes": [
       "眼镜副屏：一条 480×352 的单绿 HUD，主图分时 + 副图大单净额，和手机 App 同一套数据口径",
       "大单门槛与 App 内 Analyzer.analyze 对齐：分钟成交额中位数 ×1.8，下限 100 万，样本不足 15 根上浮 50%",
@@ -41,10 +41,10 @@
     {
       "versionName": "2.6.1",
       "versionCode": "52",
-      "releasedAt": "2026-11-13T23:59:38Z",
+      "releasedAt": "2026-11-14T02:07:03Z",
       "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-rokid-ota-2.6.1-b52.ipa",
-      "size": 994508,
-      "sha256": "ca9fea25d2ac221ff6baa1dd552420554990facb80c75fb5845141e76547c919",
+      "size": 996770,
+      "sha256": "4361b60d931076c49949ffd146a65760f1af0db78c66b192816539ed689b6979",
       "notes": [
         "眼镜副屏：一条 480×352 的单绿 HUD，主图分时 + 副图大单净额，和手机 App 同一套数据口径",
         "大单门槛与 App 内 Analyzer.analyze 对齐：分钟成交额中位数 ×1.8，下限 100 万，样本不足 15 根上浮 50%",
@@ -56,14 +56,15 @@
   ],
   "agent": {
     "name": "AIUI 智能体「行情副屏」",
-    "file": "aiui-agent-rokid-2.6.1-b52.aix",
-    "size": 51463,
-    "version": "2.6.1",
+    "file": "aiui-agent-rokid-2.6.3-b52.aix",
+    "size": 55300,
+    "version": "2.6.3",
     "page": "pages/quotes/index",
     "url": "https://github.com/summysummy-collab/bigorder-rokid/releases/tag/ci-signed",
     "local": false,
     "notes": [
       "眼镜端界面、扫码导入、切股逻辑全在智能体里，ipa 只负责喂数据",
+      "顶栏常显版本号，比远端旧时底栏提示可升级",
       "装法：aix install 之后必须用 aix launch-page 带上 pages/quotes/index 拉起，否则可能落到别的页面"
     ]
   }
