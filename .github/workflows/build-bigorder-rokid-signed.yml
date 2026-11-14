@@ -99,7 +99,14 @@ jobs:
           npm install -g @yodaos-pkg/aix-cli > /dev/null
           test -f .aixignore || { echo "::error::缺 .aixignore，打包会把 tools/ 和冗余 vendor 一起塞进去"; exit 1; }
 
-          AIX_NAME="aiui-agent-rokid-${APP_VER}-b${APP_BUILD}.aix"
+          # 智能体有自己的版本号（源码常量），和 App 版本解耦：
+          # 眼镜端顶栏显示它、也拿它比「有没有新版」，所以清单里的 agent.version 必须是它。
+          # 从源码读而不是手填，省得改了代码忘了改文档。
+          AGENT_VER=$(sed -n "s/.*AGENT_VERSION = '\([0-9.]*\)'.*/\1/p" lib/version.js | head -1)
+          [ -n "$AGENT_VER" ] || { echo "::error::lib/version.js 里没解析到 AGENT_VERSION"; exit 1; }
+          echo "智能体版本：${AGENT_VER}（App ${APP_VER} b${APP_BUILD}）"
+
+          AIX_NAME="aiui-agent-rokid-${AGENT_VER}-b${APP_BUILD}.aix"
           ZIP_NAME="aiui-agent-rokid-src-${APP_VER}-b${APP_BUILD}.zip"
           aix pack . -o "$RUNNER_TEMP/$AIX_NAME" > pack.log 2>&1 || {
             echo "::error::aix pack 失败"; tail -20 pack.log; exit 1; }
@@ -111,7 +118,7 @@ jobs:
           #   vendor/webpjs 缺了 → 扫码解码挂掉（webp.js 把它当字符串内联）
           aix list "$RUNNER_TEMP/$AIX_NAME" > list.txt
           for f in app.json app.js AGENTS.md pages/quotes/index.ink pages/scan/index.ink \
-                   lib/market.js lib/hud.js lib/bridge.js lib/webp.js \
+                   lib/market.js lib/hud.js lib/bridge.js lib/version.js lib/webp.js \
                    lib/vendor/webpjs/webpjs.source.js; do
             grep -q "^$f:" list.txt || { echo "::error::智能体包缺 $f"; exit 1; }
           done
@@ -128,6 +135,7 @@ jobs:
 
           echo "AGENT_FILE=$AIX_NAME" >> "$GITHUB_ENV"
           echo "AGENT_ZIP=$ZIP_NAME" >> "$GITHUB_ENV"
+          echo "AGENT_VERSION=$AGENT_VER" >> "$GITHUB_ENV"
           # 体积进安装页的 chips，所以这里就得算好。
           # 拆成两行：macOS 自带的 bash 3.2 对 "$(cmd "$var")" 这种嵌套引号不总是稳。
           AGENT_BYTES=$(stat -f%z "$RUNNER_TEMP/$AIX_NAME")
@@ -413,8 +421,9 @@ jobs:
             --expires "${PROFILE_EXPIRES:-}" \
             --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             --agent-file "$AGENT_FILE" --agent-size "${AGENT_SIZE:-0}" \
+            --agent-version "${AGENT_VERSION:-}" \
             --agent-url "https://github.com/${SRC_REPO}/releases/tag/ci-signed" \
-            --agent-notes "眼镜端界面、扫码导入、切股逻辑全在智能体里，ipa 只负责喂数据,装法：aix install 之后必须用 aix launch-page 带上 pages/quotes/index 拉起，否则可能落到别的页面"
+            --agent-notes "眼镜端界面、扫码导入、切股逻辑全在智能体里，ipa 只负责喂数据,顶栏常显版本号，比远端旧时底栏提示可升级,装法：aix install 之后必须用 aix launch-page 带上 pages/quotes/index 拉起，否则可能落到别的页面"
 
           # 站点是 main/docs，GitHub Pages 直接吃这个目录；所有包共用一张总览页，
           # 每个包只往自己的子目录写 ota.json + manifest.plist。

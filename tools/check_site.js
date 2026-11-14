@@ -5,7 +5,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const ROOT = path.resolve(__dirname, '..', 'docs');
+// 默认校验仓库里的 docs；发布目录在别处时用 SITE_ROOT 指过去
+const ROOT = process.env.SITE_ROOT
+  ? path.resolve(process.env.SITE_ROOT)
+  : path.resolve(__dirname, '..', 'docs');
 const store = {};
 function el(id) {
   if (!store[id]) store[id] = { id, innerHTML: '', textContent: '', className: '', style: {} };
@@ -66,7 +69,7 @@ setTimeout(() => {
     ['包数量', store['st-count'] && store['st-count'].textContent],
     ['卡片字节', cards.length],
     ['含安装按钮', /itms-services:\/\/\?action=download-manifest/.test(cards)],
-    ['含 sha', /5150625e78917fac/.test(cards)],
+    ['含 sha', /SHA-256<\/span><code>[0-9a-f]{64}<\/code>/.test(cards)],
     ['智能体卡', agent.length > 0],
     ['历史条数', (hist.match(/<li class=/g) || []).length],
     ['二维码', store['qr'] && /data-qr/.test(store['qr'].innerHTML)],

@@ -77,6 +77,9 @@ def main():
     p.add_argument("--agent-file", default="")
     p.add_argument("--agent-size", type=int, default=0)
     p.add_argument("--agent-url", default="")
+    p.add_argument("--agent-version", default="",
+                   help="智能体自己的版本号（默认跟随 App 版本）。眼镜端就是拿它比「是否最新」，"
+                        "必须等于 aiui-agent/lib/version.js 里的 AGENT_VERSION")
     p.add_argument("--agent-local", action="store_true",
                    help=".aix 跟页面放同一目录，走相对路径直下")
     p.add_argument("--agent-page", default="pages/quotes/index")
@@ -132,7 +135,9 @@ def main():
             "name": "AIUI 智能体「行情副屏」",
             "file": args.agent_file,
             "size": args.agent_size,
-            "version": args.version,
+            # 智能体独立迭代：眼镜端顶栏显示的版本号跟自己比，
+            # 这里要是只跟着 App 版本走，智能体改了版本也看不出该不该更新
+            "version": args.agent_version or args.version,
             "page": args.agent_page,
             "url": args.agent_url,
             "local": bool(args.agent_local),

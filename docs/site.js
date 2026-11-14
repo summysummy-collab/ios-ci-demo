@@ -170,11 +170,8 @@
     var installBtn;
     if (!hasPkg) {
       installBtn = '<a class="btn off">还没有出过包</a>';
-    } else if (!isSafari && manifestURL) {
-      // 桌面/微信里照样给出 itms 链接，点不动时下面的提示会说明原因
-      installBtn = '<a class="btn" href="' + esc(itms(manifestURL)) + '">' +
-        ICON_PHONE_DL + '在 iPhone 上安装</a>';
     } else if (manifestURL) {
+      // 桌面 / 微信里照样给出 itms 链接，点不动时下方提示会说明原因
       installBtn = '<a class="btn" href="' + esc(itms(manifestURL)) + '">' +
         ICON_PHONE_DL + '在 iPhone 上安装</a>';
     } else {
@@ -234,6 +231,7 @@
     }
 
     var notes = (agent.notes || []).map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('');
+    var ver = esc(agent.version || '—');
 
     return '' +
       '<h3>AIUI 智能体（眼镜上的界面）</h3>' +
@@ -244,13 +242,16 @@
             '<h2>' + esc(agent.name || 'AIUI 智能体') + '</h2>' +
             '<div class="pkg">' + esc(agent.file) + '</div>' +
           '</div>' +
-          '<div class="ver">v' + esc(agent.version || '—') + '</div>' +
+          '<div class="ver">v' + ver + '</div>' +
         '</div>' +
         '<div class="chips">' +
           '<span class="chip">体积 <b>' + fmtSize(agent.size) + '</b></span>' +
           '<span class="chip">引擎 <b>AIUI</b></span>' +
           (agent.page ? '<span class="chip">入口 <b>' + esc(agent.page) + '</b></span>' : '') +
         '</div>' +
+        '<p class="publine" style="margin:10px 0 0">眼镜端顶栏会一直显示 <b>v' + ver + '</b>' +
+          '（在「自选股」右边）。它每次进页面都会跟这里比一次，' +
+          '装了旧版会在底栏提示「有新版本」；走直连、没网时只显示版本号，不会谎报已是最新。</p>' +
         (notes ? '<ul class="notes">' + notes + '</ul>' : '') +
         btn +
       '</section>';
