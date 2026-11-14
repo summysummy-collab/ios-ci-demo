@@ -82,9 +82,12 @@ jobs:
           xcodegen generate
           test -d "$PROJECT" || { echo "::error::xcodegen 未生成工程"; exit 1; }
 
-          # 版本号直接从工程配置读，产物命名和摘要都用它，避免和 project.yml 走神
-          VER=$(grep -m1 'CFBundleShortVersionString' project.yml | sed -E 's/.*: *"([^"]+)".*/\1/')
-          BUILD=$(grep -m1 'CFBundleVersion' project.yml | sed -E 's/.*: *"([^"]+)".*/\1/')
+          # 版本号从 settings.base 读（唯一的真源）；Info.plist 段是 $(MARKETING_VERSION)，
+          # 所以不能再去 grep CFBundleShortVersionString —— 那样只会拿到变量名。
+          # 锚定行首，避免匹配到注释里提到的名字。
+          VER=$(grep -m1 -E '^[[:space:]]+MARKETING_VERSION:' project.yml | sed -E 's/.*: *"?([0-9][0-9.]*)"?.*/\1/')
+          BUILD=$(grep -m1 -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' project.yml | sed -E 's/.*: *"?([0-9]+)"?.*/\1/')
+          [ -n "$VER" ] && [ -n "$BUILD" ] || { echo "::error::读不到版本号（project.yml 的 MARKETING_VERSION / CURRENT_PROJECT_VERSION）"; exit 1; }
           echo "APP_VER=${VER}" >> "$GITHUB_ENV"
           echo "APP_BUILD=${BUILD}" >> "$GITHUB_ENV"
           echo "版本: ${VER} (${BUILD})"
@@ -268,6 +271,15 @@ jobs:
 
           BID=$(plutil -extract CFBundleIdentifier raw "$APP/Info.plist")
           [ "$BID" = "$BUNDLE_ID" ] || { echo "::error::Bundle ID 是 ${BID}，应为 $BUNDLE_ID"; exit 1; }
+
+          # 包里的版本必须和工程配置一致：project.yml 曾经在 Info.plist 段另写了一份
+          # 2.6.1，Info.plist 的值优先，改了 MARKETING_VERSION 也出不来新版本号，
+          # 结果是「代码是新的、版本号还是旧的」，安装页和眼镜端的升级提示都跟着错。
+          PKG_VER=$(plutil -extract CFBundleShortVersionString raw "$APP/Info.plist")
+          PKG_BLD=$(plutil -extract CFBundleVersion raw "$APP/Info.plist")
+          [ "$PKG_VER" = "$APP_VER" ] && [ "$PKG_BLD" = "$APP_BUILD" ] \
+            || { echo "::error::包内版本 ${PKG_VER}(${PKG_BLD}) 与工程配置 ${APP_VER}(${APP_BUILD}) 不一致"; exit 1; }
+          echo "包内版本: ${PKG_VER} (${PKG_BLD})"
 
           # 眼镜行情桥靠局域网 http://<手机>:8788；iOS 14+ 缺这条说明，真机上
           # 本地网络权限弹窗不出现、桥永远连不上，而编译阶段完全不报错。
