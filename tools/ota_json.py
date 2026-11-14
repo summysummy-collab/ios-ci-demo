@@ -132,7 +132,7 @@ def main():
 
     if args.agent_file:
         doc["agent"] = {
-            "name": "AIUI 智能体「行情副屏」",
+            "name": "AIUI 智能体「自选盯盘」",  # 必须与 app.json 的 agentName 一致，语音只认这个名字
             "file": args.agent_file,
             "size": args.agent_size,
             # 智能体独立迭代：眼镜端顶栏显示的版本号跟自己比，
