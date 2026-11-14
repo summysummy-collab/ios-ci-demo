@@ -1,16 +1,20 @@
 name: build-golf-caddie
-# trigger: 1.2 (3) —— 第二池 macos-15 抢占
+# trigger: 1.16 (17) —— 删掉眼镜 APK 链路，只留 AIUI 局域网桥
+#
+# 这一行是**触发位**：细粒度 PAT 没有 Actions:write 时无法 workflow_dispatch，
+# 改这一行再 push 本文件即可起一次构建（workflow 自带 on.push 针对本文件）。
+# 每次要重新构建就改这里的版本号。
 
 # 在 public 仓库（免额度、日志可审计）里构建私有项目 rokid-caddie 的 AI 球童 iOS 端，
 # 签出可装机 ipa 回传私有仓库 Release ci-signed。
 #
+# 1.16 起不再依赖 CXR-L SDK：手机与眼镜之间只剩一条局域网 HTTP 桥（PhoneBridge），
+# AIUI 页面直接来拉。所以这里没有 CocoaPods、没有 3MB 的 modules/、
+# 产出里也不该再出现 RGCxrClient.framework 和 glasses.apk —— 下面都做反向断言。
+#
 # 与 build-caddie-bridge.yml 的关系：同一个 App ID（com.rokidcaddie.bridge）、
 # 同一份 development 描述文件（rokid-caddie-bridge.mobileprovision）。
 # 因此两个 App 装到同一台设备上会互相覆盖 —— 只能留一个。
-#
-# 与 build-caddie-bridge.yml 的差别：
-#   - 需要 CocoaPods：CXR-L SDK 以本地 pod 形式 vendor 在 golf-caddie/ios/modules/
-#   - 产物含 RGCxrClient.framework，才能走 BLE 连真眼镜（否则 canImport 不成立、退回 Mock）
 on:
   workflow_dispatch:
     inputs:
@@ -66,25 +70,17 @@ jobs:
           sudo xcode-select -s "$XCODE_APP"
           xcodebuild -version
 
-      - name: 生成工程并装 Pod
+      - name: 生成工程
         working-directory: src/golf-caddie/ios
         run: |
           set -euo pipefail
           brew install xcodegen
           xcodegen generate
           test -d GolfCaddie.xcodeproj || { echo "::error::xcodegen 未生成工程"; exit 1; }
-
-          # CXR-L SDK 不在公共 CocoaPods（官方 spec 在 Rokid 内网 GitLab），
-          # 以本地 :path pod 形式 vendor 在 modules/，必须 pod install 才能编进真机通道。
-          test -d modules/RGCxr || { echo "::error::缺 modules/RGCxr，CXR SDK 未入库"; exit 1; }
-          if ! command -v pod >/dev/null 2>&1; then
-            sudo gem install cocoapods --no-document
-          fi
-          pod --version
-          pod install --verbose 2>&1 | tail -40 || {
-            echo "::error::pod install 失败"; tail -40 Podfile; exit 1; }
-          test -d GolfCaddie.xcworkspace || { echo "::error::pod install 未生成 xcworkspace"; exit 1; }
-          echo "工程与 Pods 已就绪"
+          # 反向断言：链路里不该再有任何 CXR 的东西
+          test ! -d modules && test ! -f Podfile \
+            || { echo "::error::还留着 CXR Pod/modules，1.16 起已不需要"; exit 1; }
+          echo "工程已就绪（无 Pods）"
 
       - name: 导入签名证书
         env:
@@ -133,7 +129,7 @@ jobs:
           set +e
           # 签名设置全在 project.yml 里（只作用于主 target），命令行不传签名参数，
           # 避免污染 Pods 的 framework。
-          xcodebuild -workspace GolfCaddie.xcworkspace -scheme "$SCHEME" \
+          xcodebuild -project GolfCaddie.xcodeproj -scheme "$SCHEME" \
             -configuration Release -destination "generic/platform=iOS" \
             -archivePath build/GolfCaddie.xcarchive archive > build.log 2>&1
           STATUS=$?
@@ -176,7 +172,7 @@ jobs:
           ls -lh build/*.ipa
           echo "sha256: $(shasum -a 256 build/*.ipa | cut -d' ' -f1)"
 
-      - name: 校验签名与 SDK 内嵌
+      - name: 校验签名与包内容
         working-directory: src/golf-caddie/ios
         run: |
           set -euo pipefail
@@ -188,18 +184,21 @@ jobs:
           BID=$(plutil -extract CFBundleIdentifier raw "$APP/Info.plist")
           [ "$BID" = "$BUNDLE_ID" ] || { echo "::error::Bundle ID 是 $BID，应为 $BUNDLE_ID"; exit 1; }
 
-          # 真机通道的硬证据：canImport(RGCxrClient) 成立才会把它链进包
-          find "$APP/Frameworks" -maxdepth 1 -name "RGCxrClient.framework" | grep -q . \
-            || { echo "::error::包内缺 RGCxrClient.framework，CXR 真机通道没编进去（会退回 Mock）"; exit 1; }
-          echo "CXR-L SDK 已内嵌（可连真眼镜）"
+          # 眼镜端链路已删干净：包里不该再有 SDK framework，也不该再有 APK
+          if find "$APP" -name "RGCxrClient.framework" | grep -q .; then
+            echo "::error::包里还有 RGCxrClient.framework，CXR 没删干净"; exit 1
+          fi
+          if find "$APP" -name "glasses.apk" | grep -q .; then
+            echo "::error::包里还有 glasses.apk，眼镜端 APK 不该再随 App 分发"; exit 1
+          fi
 
-          # BLE 连眼镜必须有的权限键，缺了会在授权后直接 SIGABRT
-          plutil -extract NSBluetoothAlwaysUsageDescription raw "$APP/Info.plist" > /dev/null \
-            || { echo "::error::缺 NSBluetoothAlwaysUsageDescription"; exit 1; }
-          # 眼镜端 APK 要随包分发，iOS 端用它推给眼镜安装
-          test -f "$APP/glasses.apk" || { echo "::error::缺内置眼镜端 APK"; exit 1; }
+          # AIUI 要连手机，必须声明局域网用途；后台续命靠 location
+          plutil -extract NSLocalNetworkUsageDescription raw "$APP/Info.plist" > /dev/null \
+            || { echo "::error::缺 NSLocalNetworkUsageDescription"; exit 1; }
+          plutil -extract UIBackgroundModes json -o - "$APP/Info.plist" | grep -q location \
+            || { echo "::error::UIBackgroundModes 缺 location，锁屏后桥会停"; exit 1; }
 
-          echo "Bundle ID: $BID · 蓝牙权限已声明 · 眼镜端 APK 已内置"
+          echo "Bundle ID: $BID · 局域网桥已声明 · 无 CXR/APK 残留"
           echo "体积: $(du -sh "$APP" | cut -f1)"
           echo "登记设备数: $(security cms -D -i "$APP/embedded.mobileprovision" \
             | plutil -extract ProvisionedDevices json -o - - 2>/dev/null | grep -o '"' | wc -l | awk '{print $1/2}')"
@@ -227,7 +226,7 @@ jobs:
             echo ""
             echo "- 源码：私有仓库 \`${SRC_REPO}\`（\`${APP_DIR}\`）"
             echo "- 签名：development 描述文件 \`${PROFILE_NAME}\`，bundle id \`${BUNDLE_ID}\`"
-            echo "- 含 CXR-L SDK（本地 pod），可 BLE 连真眼镜"
+            echo "- 无 Pods / 无 CXR SDK / 无内置 APK；手机只经局域网 HTTP 桥给 AIUI 供数"
             echo "- 产物：私有仓库 Release \`ci-signed\`"
             echo "- 装机前提：设备必须在描述文件登记列表里"
             echo "- ⚠️ 与「球童桥」同 App ID，装这个会覆盖它"
