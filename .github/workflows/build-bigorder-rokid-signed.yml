@@ -115,11 +115,12 @@ jobs:
           # 断言包内容。这几条对应真机上会直接崩的三个点：
           #   pages/*.ink 缺了 → 智能体没有页面
           #   lib/*.js 缺了 → 行情和大单全废
+          #   sample.js 缺了 → 没连手机时又退回一整屏空白（只是不再报错）
           #   vendor/webpjs 缺了 → 扫码解码挂掉（webp.js 把它当字符串内联）
           aix list "$RUNNER_TEMP/$AIX_NAME" > list.txt
           for f in app.json app.js AGENTS.md pages/quotes/index.ink pages/scan/index.ink \
                    lib/market.js lib/hud.js lib/bridge.js lib/version.js lib/webp.js \
-                   lib/vendor/webpjs/webpjs.source.js; do
+                   lib/sample.js lib/vendor/webpjs/webpjs.source.js; do
             grep -q "^$f:" list.txt || { echo "::error::智能体包缺 $f"; exit 1; }
           done
           if grep -q '^tools/' list.txt; then
