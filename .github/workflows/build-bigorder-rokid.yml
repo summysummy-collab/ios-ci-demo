@@ -56,8 +56,8 @@ jobs:
         run: |
           set -euo pipefail
           brew install xcodegen
-          # 只校验编译，不发包，凭证一律留空：
-          # Config/Secrets.xcconfig 里是空占位，App 启动后走「云同步不可用」分支。
+          # 只校验编译，不发包 —— 这里**故意**用空值覆盖内置凭证（Config/Secrets.xcconfig
+          # 现在带真值），顺便验证「没有凭证时 App 走云同步不可用分支」也能编译通过。
           mkdir -p Config
           printf 'BOCOS_AK=\nBOCOS_SK=\n' > Config/Secrets.local.xcconfig
           xcodegen generate

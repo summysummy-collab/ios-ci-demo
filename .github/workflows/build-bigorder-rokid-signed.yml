@@ -29,7 +29,7 @@ permissions:
 
 env:
   SRC_REPO: summysummy-collab/bigorder-rokid
-  # OTA 包（云同步凭证置空）与安装页都落在这个公开仓库
+  # OTA 包（与私有包同一份产物，含内置云同步凭证）与安装页都落在这个公开仓库
   OTA_REPO: summysummy-collab/ios-ci-demo
   PROJECT: BigOrderMonitor.xcodeproj
   SCHEME: BigOrderMonitor
@@ -63,22 +63,19 @@ jobs:
 
       - name: 安装 XcodeGen 并生成工程
         working-directory: src
-        env:
-          BOCOS_AK: ${{ secrets.BOCOS_AK }}
-          BOCOS_SK: ${{ secrets.BOCOS_SK }}
         run: |
           set -euo pipefail
           brew install xcodegen
-          # ipa 落在私有仓库 Release，凭证按真值注入，装到手机上云同步可用。
-          # 注意 Config/Secrets.xcconfig 的 #include? 在末尾，这里只写 AK/SK。
-          mkdir -p Config
-          {
-            echo "BOCOS_AK=${BOCOS_AK}"
-            echo "BOCOS_SK=${BOCOS_SK}"
-          } > Config/Secrets.local.xcconfig
-          if [ -z "${BOCOS_AK}" ]; then
-            echo "::warning::未配置 BOCOS_AK/BOCOS_SK，本次包的云同步将不可用（不影响出包）"
+          # 凭证真值已内置在 Config/Secrets.xcconfig（明文入库），CI 不再注入。
+          # 以前这里按 secrets 生成 Secrets.local.xcconfig：secrets 缺失时会写空串，
+          # 而 xcconfig 是后赋值覆盖前赋值 —— 空串把真值清掉、还不报错。
+          # 现在只做一件事：确认内置值还在，不在就红。
+          if ! grep -qE '^BOCOS_AK *= *AKID[0-9A-Za-z]+' Config/Secrets.xcconfig; then
+            echo "::error::Config/Secrets.xcconfig 里没有内置 COS 凭证（BOCOS_AK 空或格式不对）"
+            exit 1
           fi
+          rm -f Config/Secrets.local.xcconfig
+          echo "使用源码内置凭证"
           xcodegen generate
           test -d "$PROJECT" || { echo "::error::xcodegen 未生成工程"; exit 1; }
 
@@ -320,61 +317,33 @@ jobs:
             "$RUNNER_TEMP/$AGENT_ZIP" -R "$SRC_REPO" --clobber
           echo "已上传 $OUT / $AGENT_FILE / $AGENT_ZIP 到 $SRC_REPO Release ci-signed"
 
-      # ── OTA 专用版 ────────────────────────────────────────────────────────────
-      # ipa 的 Info.plist 里带着明文云同步凭证（BOCosAK/BOCosSK）。放在私有 Release
-      # 没问题，但 OTA 安装要求 ipa 能被手机匿名 GET —— 一旦公开就等于公开密钥。
-      # 所以这里重编一次：删掉本地 Secrets.local.xcconfig，#include? 退化成空占位，
-      # 凭证变成空字符串。代价是 OTA 版没有云同步，其余功能完全一致。
-      - name: OTA 版：去掉云同步凭证并重新归档
+      # ── OTA 版 ────────────────────────────────────────────────────────────────
+      # 以前这里会重编一次、把 Info.plist 里的 BOCosAK/BOCosSK 清空 —— 因为 OTA ipa
+      # 必须能被手机匿名 GET，公开就等于公开密钥。
+      # 现在按用户明确要求「不规避泄露」：OTA 包与私有包复用同一份产物，
+      # 装完直接云同步，不用在手机上再手填一遍。
+      # 护栏方向反过来：**凭证必须存在**，缺了就说明内置值没进包，宁可 CI 红。
+      - name: OTA 版：复用同一份 ipa 并校验凭证
         working-directory: src
         run: |
           set -euo pipefail
-          # xcconfig 是「后赋值覆盖前赋值」，#include? 在文件末尾，删掉 local 文件即回到空占位。
-          # 先确认这个结构没变，否则置空会静默失效、凭证照样打进包里。
-          grep -q '#include? "Secrets.local.xcconfig"' Config/Secrets.xcconfig \
-            || { echo "::error::Secrets.xcconfig 的 include 结构变了，置空方案失效，拒绝继续"; exit 1; }
-          rm -f Config/Secrets.local.xcconfig
-
           rm -rf build-ota && mkdir -p build-ota
-          set +e
-          xcodebuild -project "$PROJECT" -scheme "$SCHEME" \
-            -configuration Release -destination "generic/platform=iOS" \
-            -archivePath build-ota/ota.xcarchive archive > build-ota.log 2>&1
-          STATUS=$?
-          if [ $STATUS -ne 0 ]; then
-            echo "::error::OTA 版归档失败"
-            grep -oE '[^ /]+\.(swift|m|h):[0-9]+:[0-9]+: error' build-ota.log | sort -u | head -20 || true
-            rm -f build-ota.log
-            exit 1
-          fi
-          rm -f build-ota.log
-          echo "OTA 版归档通过"
-
-      - name: OTA 版：导出并校验凭证已清空
-        working-directory: src
-        env:
-          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          xcodebuild -exportArchive -archivePath build-ota/ota.xcarchive \
-            -exportPath build-ota -exportOptionsPlist exportOptions.plist > export-ota.log 2>&1 || {
-              echo "::error::OTA 版导出失败"; tail -20 export-ota.log; exit 1; }
-          IPA=$(ls "$PWD"/build-ota/*.ipa | head -1)
+          SRC_IPA=$(ls build/*.ipa | head -1)
+          cp "$SRC_IPA" build-ota/ota.ipa
+          IPA="$PWD/build-ota/ota.ipa"
           ls -lh "$IPA"
 
           rm -rf chk-ota && mkdir chk-ota && cd chk-ota
           unzip -q "$IPA"
           APP=$(find Payload -maxdepth 1 -name "*.app" | head -1)
 
-          # 硬护栏：这两个值为空才允许上传到公开位置。宁可让 CI 红一次，
-          # 也不能把带真实密钥的包推到全网可下载的 Release。
           AK=$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb")).get("BOCosAK","") or "")' "$APP/Info.plist")
           SK=$(python3 -c 'import plistlib,sys; print(plistlib.load(open(sys.argv[1],"rb")).get("BOCosSK","") or "")' "$APP/Info.plist")
-          if [ -n "$AK" ] || [ -n "$SK" ]; then
-            echo "::error::OTA 包里的云同步凭证没被清空（AK 长度 ${#AK}），拒绝上传公开仓库"
+          if [ ${#AK} -lt 10 ] || [ ${#SK} -lt 10 ]; then
+            echo "::error::包里没有云同步凭证（AK ${#AK} / SK ${#SK} 字符）——检查 Config/Secrets.xcconfig 是否已内置真值"
             exit 1
           fi
-          echo "护栏通过：BOCosAK / BOCosSK 均为空"
+          echo "护栏通过：内置凭证已打进包（AK ${#AK} 字符 / SK ${#SK} 字符）"
 
           codesign --verify --strict --verbose=2 "$APP" 2>&1 | tail -2
           echo "OTA 版体积: $(du -sh "$APP" | cut -f1)"
@@ -395,7 +364,7 @@ jobs:
 
           gh release view ota -R "$OTA_REPO" > /dev/null 2>&1 \
             || gh release create ota -R "$OTA_REPO" --title "OTA 测试版（公开分发）" \
-                 --notes "OTA 专用包：云同步凭证已置空，其余功能与完整版一致。完整版见各自私有仓库的 ci-signed。" > /dev/null
+                 --notes "OTA 包与私有 ci-signed 完全一致（含内置云同步凭证），装完即可同步。" > /dev/null
           # 只留最新一个：清掉同名前缀的旧包，避免 Release 里堆一长串过期 ipa
           OLD=$(gh release view ota -R "$OTA_REPO" --json assets -q '.assets[].name' 2>/dev/null \
                 | grep -E '^BigOrderMonitor-rokid-ota-' || true)
@@ -472,10 +441,10 @@ jobs:
             echo "| ipa（含云同步凭证） | \`$SRC_REPO\` Release \`ci-signed\` | 否，私有 |"
             echo "| 智能体 \`.aix\` | \`$SRC_REPO\` Release \`ci-signed\` | 否，私有 |"
             echo "| 智能体源码 \`.zip\` | \`$SRC_REPO\` Release \`ci-signed\` | 否，私有 |"
-            echo "| ipa（凭证已置空） | OTA Release \`ota\` | 是，供安装页 |"
+            echo "| ipa（含内置云同步凭证） | OTA Release \`ota\` | 是，供安装页 |"
             echo ""
             echo "- 眼镜端智能体：\`${AGENT_FILE:-（未打包）}\`，装完 App 后在「设置 → 眼镜副屏」配对"
             echo "- OTA 安装页：https://${OTA_REPO%%/*}.github.io/${OTA_REPO##*/}/"
             echo "- ⚠️ bundle id 与正式「大单监控」相同，装上会覆盖原 App"
-            echo "- ⚠️ OTA 版云同步不可用；要云同步请用私有 Release 的完整版"
+            echo "- ⚠️ OTA 包与私有包同一份产物：内置 COS 凭证随 ipa 公开，按用户要求接受"
           } >> "$GITHUB_STEP_SUMMARY"
