@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "channel": "development",
-  "generatedAt": "2026-11-14T14:09:31Z",
-  "runURL": "https://github.com/summysummy-collab/ios-ci-demo/actions/runs/43603154523",
+  "generatedAt": "2026-11-14T17:16:42Z",
+  "runURL": "https://github.com/summysummy-collab/ios-ci-demo/actions/runs/43619939802",
   "app": {
     "id": "bigorder-rokid",
     "name": "大单监控 · 乐奇版",
@@ -17,12 +17,12 @@
     "manifest": "manifest.plist"
   },
   "latest": {
-    "versionName": "2.6.4",
-    "versionCode": "55",
-    "releasedAt": "2026-11-14T14:09:31Z",
-    "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-rokid-ota-2.6.4-b55.ipa",
-    "size": 998359,
-    "sha256": "d1fd465db59517c96b7634e3fbf7b4518e7b6dd366b36ca29065ee8b9dc65699",
+    "versionName": "2.6.5",
+    "versionCode": "56",
+    "releasedAt": "2026-11-14T17:16:42Z",
+    "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-rokid-ota-2.6.5-b56.ipa",
+    "size": 1006977,
+    "sha256": "04d0273d98214656a5beb206f289aaf421adf4b9a9b7c2e04b9b6e90d9f65242",
     "notes": [
       "主图当日分时（价格线 + 均价 + 昨收虚线），副图大单净额（±零轴柱 + 累计曲线）",
       "镜腿前滑 / 后滑切上一只 / 下一只，350ms 内的连滑合并成一次",
@@ -37,6 +37,20 @@
     }
   },
   "history": [
+    {
+      "versionName": "2.6.5",
+      "versionCode": "56",
+      "releasedAt": "2026-11-14T17:16:42Z",
+      "url": "https://github.com/summysummy-collab/ios-ci-demo/releases/download/ota/BigOrderMonitor-rokid-ota-2.6.5-b56.ipa",
+      "size": 1006977,
+      "sha256": "04d0273d98214656a5beb206f289aaf421adf4b9a9b7c2e04b9b6e90d9f65242",
+      "notes": [
+        "主图当日分时（价格线 + 均价 + 昨收虚线），副图大单净额（±零轴柱 + 累计曲线）",
+        "镜腿前滑 / 后滑切上一只 / 下一只，350ms 内的连滑合并成一次",
+        "手机侧在 8788 起 HTTP + SSE 行情桥，桥不通自动回落直连行情源",
+        "顶栏角标显示「桥 / 直连」，一眼看出当前走的哪条链路"
+      ]
+    },
     {
       "versionName": "2.6.4",
       "versionCode": "55",
@@ -82,10 +96,10 @@
     }
   ],
   "agent": {
-    "name": "AIUI 智能体「行情副屏」",
-    "file": "aiui-agent-rokid-2.6.9-b55.aix",
-    "size": 61085,
-    "version": "2.6.9",
+    "name": "AIUI 智能体「自选盯盘」",
+    "file": "aiui-agent-rokid-2.6.13-b56.aix",
+    "size": 65439,
+    "version": "2.6.13",
     "page": "pages/quotes/index",
     "url": "https://github.com/summysummy-collab/bigorder-rokid/releases/tag/ci-signed",
     "local": false,
