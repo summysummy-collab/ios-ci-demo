@@ -276,9 +276,9 @@
           (idx === 0 ? '<span class="tag">最新</span>' : '') +
           '<span class="when">' + fmtDate(h.releasedAt) + '</span>' +
         '</div>' +
-        '<p class="who">' + esc(it.label) + ' · ' + fmtSize(h.size) + ' · ' +
-          (h.url ? '<a class="dl" href="' + esc(resolve(h.url, it.ota.__dataURL)) + '" download>下载</a>' : '无包') +
-        '</p>' +
+        // 历史版本不给下载链接：Release 只保留最新一个包，站点也以最新为准，
+        // 摆出来的旧链接多半是 404 或早已过期的二进制。这里只说明「装过什么」。
+        '<p class="who">' + esc(it.label) + ' · ' + fmtSize(h.size) + ' · 历史版本</p>' +
         (h.notes && h.notes.length ? '<p>' + h.notes.map(esc).join('；') + '</p>' : '') +
       '</li>';
     }).join('') + '</ul>';
