@@ -1,5 +1,5 @@
 name: build-golf-caddie
-# trigger: 1.19 (20) —— /hole 增加真实轮廓：果岭/发球台多边形、水障/沙坑多边形、球道与树
+# trigger: 1.20 (21) —— /state 长轮询：状态没变就把连接挂住，省掉每 2 秒一次的请求
 #
 # 这一行是**触发位**：细粒度 PAT 没有 Actions:write 时无法 workflow_dispatch，
 # 改这一行再 push 本文件即可起一次构建（workflow 自带 on.push 针对本文件）。
